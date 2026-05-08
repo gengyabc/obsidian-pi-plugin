@@ -1,7 +1,100 @@
 import { ChildProcess, spawn } from "child_process";
 import { createInterface, Interface as ReadlineInterface } from "readline";
 
-export type EventHandler = (event: Record<string, unknown>) => void;
+export type EventHandler = (event: RpcEvent) => void;
+
+// --- RPC Event Type Interfaces ---
+// These define the structure of events received from Pi's RPC interface.
+
+export interface RpcEvent {
+    type: string;
+    id?: string;
+    success?: boolean;
+    error?: string;
+    data?: Record<string, unknown>;
+    [key: string]: unknown;
+}
+
+export interface RpcResponse extends RpcEvent {
+    type: "response";
+    id: string;
+    success: boolean;
+    data?: Record<string, unknown>;
+    error?: string;
+}
+
+export interface AgentStartEvent extends RpcEvent {
+    type: "agent_start";
+}
+
+export interface AgentEndEvent extends RpcEvent {
+    type: "agent_end";
+    messages?: Array<Record<string, unknown>>;
+}
+
+export interface MessageStartEvent extends RpcEvent {
+    type: "message_start";
+    message?: Record<string, unknown>;
+}
+
+export interface MessageUpdateEvent extends RpcEvent {
+    type: "message_update";
+    assistantMessageEvent?: AssistantMessageEvent;
+}
+
+export interface MessageEndEvent extends RpcEvent {
+    type: "message_end";
+    message?: Record<string, unknown>;
+}
+
+export interface AssistantMessageEvent {
+    type: "text_delta" | "thinking_delta" | "toolcall_start" | "toolcall_delta" | "toolcall_end" | "done" | "error" | "start" | "text_start" | "text_end" | "thinking_start" | "thinking_end";
+    delta?: string;
+    contentIndex?: number;
+    partial?: Record<string, unknown>;
+    toolCall?: Record<string, unknown>;
+    reason?: string;
+}
+
+export interface ToolExecutionStartEvent extends RpcEvent {
+    type: "tool_execution_start";
+    toolCallId: string;
+    toolName: string;
+    args?: Record<string, unknown>;
+}
+
+export interface ToolExecutionUpdateEvent extends RpcEvent {
+    type: "tool_execution_update";
+    toolCallId: string;
+    toolName: string;
+    partialResult?: Record<string, unknown>;
+}
+
+export interface ToolExecutionEndEvent extends RpcEvent {
+    type: "tool_execution_end";
+    toolCallId: string;
+    toolName: string;
+    result?: Record<string, unknown>;
+    isError?: boolean;
+}
+
+export interface AutoCompactionEndEvent extends RpcEvent {
+    type: "auto_compaction_end";
+}
+
+export interface RpcErrorEvent extends RpcEvent {
+    type: "error";
+    error: string;
+}
+
+// --- Pending Request Handler ---
+// Stores resolve/reject callbacks for async request/response matching.
+
+interface PendingRequest {
+    resolve: (value: RpcEvent) => void;
+    reject: (reason: Error) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
+}
 
 /**
  * Manages a connection to Pi's RPC interface.
@@ -9,23 +102,43 @@ export type EventHandler = (event: Record<string, unknown>) => void;
  */
 export class PiConnection {
     private piBinaryPath: string;
+    private nodePath: string;
+    private envVars: string[];
+    private apiKeys: Record<string, string>;  // provider -> key
     private cwd: string;
     private extraArgs: string[];
+    private timeout: number;
     private process: ChildProcess | null = null;
     private readline: ReadlineInterface | null = null;
     private handlers: EventHandler[] = [];
     private disconnectHandler: (() => void) | null = null;
     private connected = false;
     private requestId = 0;
-    private pendingRequests: Map<string, {
-        resolve: (value: Record<string, unknown>) => void;
-        reject: (reason: Error) => void;
-    }> = new Map();
+    private pendingRequests: Map<string, PendingRequest> = new Map();
 
-    constructor(piBinaryPath: string, cwd: string, extraArgs: string[] = []) {
+    constructor(
+        piBinaryPath: string,
+        cwd: string,
+        extraArgs: string[] = [],
+        nodePath: string = "",
+        envVars: string = "",
+        apiKeys: Record<string, string> = {},
+        timeout: number = 60_000
+    ) {
         this.piBinaryPath = piBinaryPath;
         this.cwd = cwd;
         this.extraArgs = extraArgs;
+        this.nodePath = nodePath;
+        this.envVars = envVars ? envVars.split(',').map(v => v.trim()).filter(Boolean) : [];
+        this.apiKeys = apiKeys;
+        this.timeout = timeout;
+    }
+
+    /**
+     * Update API keys after construction (used for async secret retrieval).
+     */
+    setApiKeys(keys: Record<string, string>): void {
+        this.apiKeys = keys;
     }
 
     /**
@@ -36,10 +149,49 @@ export class PiConnection {
             this.destroy();
         }
 
+        if (!this.piBinaryPath || this.piBinaryPath.trim() === "") {
+            throw new Error("Pi binary path is not configured. Please set the path in plugin settings.");
+        }
+
+        // GUI apps on macOS don't inherit shell PATH (nvm, etc.), so we need to
+        // explicitly include node in PATH
+        const currentPath = process.env.PATH || "";
+        let enhancedPath = currentPath;
+
+        // If user specified a node path, prepend it to PATH
+        if (this.nodePath && this.nodePath.trim() !== "") {
+            enhancedPath = `${this.nodePath}:${currentPath}`;
+        } else {
+            // Auto-detect: try common nvm/homebrew locations
+            const nodePaths = [
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+            ];
+            enhancedPath = [...new Set([...nodePaths, ...currentPath.split(":")])].join(":");
+        }
+
+        // Build env object, checking for required env vars
+        const env: Record<string, string> = { ...process.env, PATH: enhancedPath };
+        for (const varName of this.envVars) {
+            if (process.env[varName]) {
+                env[varName] = process.env[varName]!;
+            } else {
+                console.warn(`[Pi RPC] Env var ${varName} not found in process.env.`);
+            }
+        }
+
+        // Pass API keys directly from settings (provider -> env var name mapping)
+        for (const [provider, key] of Object.entries(this.apiKeys)) {
+            if (key && key.trim()) {
+                const envVarName = this.getEnvVarName(provider);
+                env[envVarName] = key;
+            }
+        }
+
         this.process = spawn(this.piBinaryPath, ["--mode", "rpc", ...this.extraArgs], {
             cwd: this.cwd,
             stdio: ["pipe", "pipe", "pipe"],
-            env: { ...process.env },
+            env,
         });
 
         this.connected = true;
@@ -56,7 +208,7 @@ export class PiConnection {
                 if (!trimmed) return;
 
                 try {
-                    const event = JSON.parse(trimmed) as Record<string, unknown>;
+                    const event = JSON.parse(trimmed) as RpcEvent;
                     this.dispatch(event);
                 } catch (err) {
                     // Non-JSON output — ignore (Pi may emit debug text)
@@ -74,6 +226,9 @@ export class PiConnection {
 
         // Handle process exit
         this.process.on("exit", (code: number | null, signal: string | null) => {
+            if (code !== 0) {
+                console.warn("[Pi RPC] Process exited with code", code, "signal", signal);
+            }
             this.connected = false;
             this.dispatch({
                 type: "error",
@@ -93,12 +248,26 @@ export class PiConnection {
     }
 
     /**
+     * Get the standard env var name for a provider.
+     */
+    private getEnvVarName(provider: string): string {
+        const mappings: Record<string, string> = {
+            bailian: "BAILIAN_API_KEY",
+            anthropic: "ANTHROPIC_API_KEY",
+            openai: "OPENAI_API_KEY",
+            gemini: "GOOGLE_API_KEY",
+            deepseek: "DEEPSEEK_API_KEY",
+        };
+        return mappings[provider] || `${provider.toUpperCase()}_API_KEY`;
+    }
+
+    /**
      * Send a command to Pi via stdin as a JSON line.
      * Automatically injects a request ID and returns a Promise that resolves
      * when Pi sends a matching response (type === "response" with same id).
      * Streaming events still go to onEvent handlers.
      */
-    send(command: Record<string, unknown>): Promise<Record<string, unknown>> {
+    send(command: Record<string, unknown>): Promise<RpcEvent> {
         if (!this.process || !this.process.stdin || !this.connected) {
             throw new Error("Pi is not connected");
         }
@@ -107,22 +276,29 @@ export class PiConnection {
         const line = JSON.stringify({ ...command, id }) + "\n";
 
         return new Promise((resolve, reject) => {
-            this.pendingRequests.set(id, { resolve, reject });
-
-            const timeout = setTimeout(() => {
+            // Create timeout first
+            const timeoutId = setTimeout(() => {
                 if (this.pendingRequests.has(id)) {
                     this.pendingRequests.delete(id);
-                    reject(new Error(`Request ${id} timed out after 30s`));
+                    reject(new Error(`Request ${id} timed out after ${this.timeout / 1000}s`));
                 }
-            }, 30_000);
+            }, this.timeout);
 
-            // Clear timeout when the request settles
-            const original = this.pendingRequests.get(id)!;
+            // Set the pending request BEFORE writing to stdin to avoid race condition
+            // If response arrives between setting handlers and writing, it will still be handled
             this.pendingRequests.set(id, {
-                resolve: (value) => { clearTimeout(timeout); original.resolve(value); },
-                reject: (reason) => { clearTimeout(timeout); original.reject(reason); },
+                resolve: (value) => {
+                    clearTimeout(timeoutId);
+                    resolve(value);
+                },
+                reject: (reason) => {
+                    clearTimeout(timeoutId);
+                    reject(reason);
+                },
+                timeoutId,
             });
 
+            // Now write the request
             this.process!.stdin!.write(line);
         });
     }
@@ -170,7 +346,7 @@ export class PiConnection {
         return this.connected;
     }
 
-    private dispatch(event: Record<string, unknown>): void {
+    private dispatch(event: RpcEvent): void {
         // Route responses to pending request Promises
         if (event.type === "response" && typeof event.id === "string") {
             const pending = this.pendingRequests.get(event.id);
@@ -205,7 +381,8 @@ export class PiConnection {
         this.process = null;
 
         // Reject all pending requests
-        for (const [, pending] of this.pendingRequests) {
+        for (const [id, pending] of this.pendingRequests) {
+            clearTimeout(pending.timeoutId);
             pending.reject(new Error("Pi connection closed"));
         }
         this.pendingRequests.clear();

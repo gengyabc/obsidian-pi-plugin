@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import { PiConnection } from "./rpc";
-import { DEFAULT_SETTINGS, PiSettingTab } from "./settings";
+import { API_KEY_ENV_VARS, DEFAULT_SETTINGS, DEFAULT_SECRET_NAMES, PiSettingTab } from "./settings";
 import type { PiPluginSettings } from "./settings";
 import { PiChatView, VIEW_TYPE_PI_CHAT } from "./view";
 import { SessionManager } from "./sessions";
@@ -376,8 +376,8 @@ export default class PiPlugin extends Plugin {
         // Determine working directory: setting or vault root
         const adapter = this.app.vault.adapter;
         if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
-            new Notice("Cannot determine vault path (mobile not supported)");
-            throw new Error("Vault adapter does not support getBasePath");
+            new Notice("Pi plugin requires desktop Obsidian (mobile not supported). Please use Obsidian on desktop to connect to Pi.");
+            throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
         const vaultRoot = (adapter as any).getBasePath();
         const cwd = this.settings.workingDirectory || vaultRoot;
@@ -390,41 +390,95 @@ export default class PiPlugin extends Plugin {
             args.push("--model", this.settings.defaultModel);
         }
 
-        this.connection = new PiConnection(this.settings.piBinaryPath, cwd, args);
+        // Retrieve API keys from SecretStorage asynchronously
+        const retrieveSecrets = async (): Promise<Record<string, string>> => {
+            const secrets: Record<string, string> = {};
+            const secretNames = this.settings.apiSecretNames || {};
 
-        this.connection.onEvent((event) => {
-            // Update status bar on streaming state changes
-            const type = event.type as string;
-            if (type === "agent_start") {
-                this.statusBar?.setStreaming(true);
-            } else if (type === "agent_end") {
-                this.statusBar?.setStreaming(false);
-                this.statusBar?.refreshStats();
-            } else if (type === "auto_compaction_end") {
-                new Notice("Pi conversation compacted");
+            for (const [provider, secretName] of Object.entries(secretNames)) {
+                if (!secretName) continue;
+                try {
+                    const secretValue = this.app.secretStorage.getSecret(secretName);
+                    if (secretValue) {
+                        secrets[provider] = secretValue;
+                    }
+                } catch (err) {
+                    console.warn(`[Pi Plugin] Failed to retrieve secret '${secretName}':`, err);
+                }
             }
+
+            // Fallback to legacy apiKeys for migration
+            const legacyKeys = this.settings.apiKeys || {};
+            for (const [provider, key] of Object.entries(legacyKeys)) {
+                if (key && !secrets[provider]) {
+                    secrets[provider] = key;
+                }
+            }
+
+            return secrets;
+        };
+
+        // Create connection with placeholder secrets (will be updated on connect)
+        this.connection = new PiConnection(
+            this.settings.piBinaryPath,
+            cwd,
+            args,
+            this.settings.nodePath,
+            this.settings.envVars,
+            {},  // Placeholder, updated below
+            this.settings.rpcTimeout
+        );
+
+        // Retrieve secrets and connect
+        retrieveSecrets().then((secrets) => {
+            if (this.connection) {
+                this.connection.setApiKeys(secrets);
+            }
+
+            // Attempt to connect
+            try {
+                this.connection!.connect();
+
+                // Set up event handlers
+                this.connection!.onEvent((event) => {
+                    const type = event.type as string;
+                    if (type === "agent_start") {
+                        this.statusBar?.setStreaming(true);
+                    } else if (type === "agent_end") {
+                        this.statusBar?.setStreaming(false);
+                        this.statusBar?.refreshStats();
+                    } else if (type === "auto_compaction_end") {
+                        new Notice("Pi conversation compacted");
+                    }
+                });
+
+                this.connection!.onDisconnect(() => {
+                    const view = this.getActiveView();
+                    if (view) {
+                        view.handleDisconnect();
+                    }
+                    new Notice("Pi disconnected. Use 'Pi: Send prompt' to reconnect.");
+                    this.connection = null;
+                });
+
+                // Refresh status bar and register commands once connected
+                setTimeout(() => {
+                    this.statusBar?.refreshModel();
+                    this.statusBar?.refreshStats();
+                    this.registerPiCommands();
+                }, 1000);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error("[Pi Plugin] Failed to connect to Pi:", err);
+                new Notice(`Failed to start Pi: ${msg}. Check binary path in settings.`);
+                this.connection = null;
+            }
+        }).catch((err) => {
+            console.error("[Pi Plugin] Failed to retrieve secrets:", err);
+            new Notice("Failed to retrieve API keys from secure storage");
         });
 
-        this.connection.onDisconnect(() => {
-            const view = this.getActiveView();
-            if (view) {
-                view.handleDisconnect();
-            }
-            new Notice("Pi disconnected. Use 'Pi: Send prompt' to reconnect.");
-            this.connection = null;
-        });
-
-        this.connection.connect();
-
-        // Refresh status bar and register commands once connected
-        // Use a short delay to let Pi initialize
-        setTimeout(() => {
-            this.statusBar?.refreshModel();
-            this.statusBar?.refreshStats();
-            this.registerPiCommands();
-        }, 1000);
-
-        return this.connection;
+        return this.connection!;
     }
 
     /**

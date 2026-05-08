@@ -11,6 +11,16 @@
  */
 
 import { ChatMessage, generateMessageId } from "./message-types";
+import type {
+    RpcEvent,
+    MessageStartEvent,
+    MessageUpdateEvent,
+    MessageEndEvent,
+    ToolExecutionStartEvent,
+    ToolExecutionUpdateEvent,
+    ToolExecutionEndEvent,
+    AgentEndEvent,
+} from "./rpc";
 
 export interface StreamCallbacks {
     onMessageUpdate: (msg: ChatMessage) => void;
@@ -39,8 +49,8 @@ export class StreamHandler {
      * Process a single RPC event from PiConnection.
      * Call this for every event received via PiConnection.onEvent().
      */
-    handleEvent(event: Record<string, unknown>): void {
-        const type = event.type as string;
+    handleEvent(event: RpcEvent): void {
+        const type = event.type;
 
         switch (type) {
             case 'message_start':
@@ -103,7 +113,7 @@ export class StreamHandler {
 
     // --- Event handlers ---
 
-    private handleMessageStart(event: Record<string, unknown>): void {
+    private handleMessageStart(event: RpcEvent): void {
         // Only create streaming state for assistant messages.
         // Pi emits message_start/message_end for user echoes and tool results too —
         // ignore those so we don't create ghost "Pi" elements in the view.
@@ -127,25 +137,24 @@ export class StreamHandler {
         this.callbacks.onMessageUpdate(this.buildCurrentMessage());
     }
 
-    private handleMessageUpdate(event: Record<string, unknown>): void {
+    private handleMessageUpdate(event: RpcEvent): void {
         if (!this.currentMessage) return;
 
-        const rawAme = event.assistantMessageEvent;
-        if (!rawAme || typeof rawAme !== 'object') {
+        const ame = event.assistantMessageEvent as Record<string, unknown> | undefined;
+        if (!ame) {
             console.warn("[StreamHandler] Invalid message_update event: missing assistantMessageEvent", event);
             return;
         }
-        const ame = rawAme as Record<string, unknown>;
 
-        const deltaType = ame.type;
-        if (typeof deltaType !== 'string') {
-            console.warn("[StreamHandler] Invalid assistantMessageEvent: missing or non-string type", ame);
+        const deltaType = ame.type as string | undefined;
+        if (!deltaType) {
+            console.warn("[StreamHandler] Invalid assistantMessageEvent: missing type", ame);
             return;
         }
 
         switch (deltaType) {
             case 'text_delta': {
-                const delta = ame.delta as string;
+                const delta = ame.delta as string | undefined;
                 if (delta) {
                     this.currentText += delta;
                     // Fire update with full accumulated text
@@ -154,7 +163,7 @@ export class StreamHandler {
                 break;
             }
             case 'thinking_delta': {
-                const delta = ame.delta as string;
+                const delta = ame.delta as string | undefined;
                 if (delta) {
                     this.currentThinking += delta;
                     // Update with thinking content — view can show a thinking indicator
@@ -173,7 +182,7 @@ export class StreamHandler {
             case 'toolcall_delta': {
                 // Accumulate tool call arguments
                 const contentIndex = String(ame.contentIndex ?? '');
-                const delta = ame.delta as string;
+                const delta = ame.delta as string | undefined;
                 const pending = this.pendingToolCalls.get(contentIndex);
                 if (pending && delta) {
                     pending.arguments += delta;
@@ -230,11 +239,22 @@ export class StreamHandler {
         }
     }
 
-    private handleMessageEnd(event: Record<string, unknown>): void {
+    private handleMessageEnd(event: RpcEvent): void {
         if (!this.currentMessage) return;
 
         // Finalize the message
         this.currentMessage.isStreaming = false;
+
+        // Use accumulated text from streaming deltas if available.
+        // Fall back to extracting text from the message_end event's
+        // complete message object — some models/providers don't stream
+        // text deltas but include them in the final message.
+        if (!this.currentText) {
+            const message = event.message as Record<string, unknown> | undefined;
+            if (message) {
+                this.currentText = this.extractTextFromMessage(message);
+            }
+        }
         this.currentMessage.content = this.currentText;
 
         // Use accumulated thinking from streaming deltas if available.
@@ -254,10 +274,10 @@ export class StreamHandler {
         this.currentMessage = null;
     }
 
-    private handleToolExecutionStart(event: Record<string, unknown>): void {
-        const toolCallId = event.toolCallId;
-        const toolName = event.toolName;
-        if (typeof toolCallId !== 'string' || typeof toolName !== 'string') {
+    private handleToolExecutionStart(event: RpcEvent): void {
+        const toolCallId = event.toolCallId as string | undefined;
+        const toolName = event.toolName as string | undefined;
+        if (!toolCallId || !toolName) {
             console.warn("[StreamHandler] Invalid tool_execution_start: missing toolCallId or toolName", event);
             return;
         }
@@ -269,10 +289,10 @@ export class StreamHandler {
         }
     }
 
-    private handleToolExecutionUpdate(event: Record<string, unknown>): void {
-        const toolCallId = event.toolCallId;
-        const toolName = event.toolName;
-        if (typeof toolCallId !== 'string' || typeof toolName !== 'string') {
+    private handleToolExecutionUpdate(event: RpcEvent): void {
+        const toolCallId = event.toolCallId as string | undefined;
+        const toolName = event.toolName as string | undefined;
+        if (!toolCallId || !toolName) {
             console.warn("[StreamHandler] Invalid tool_execution_update: missing toolCallId or toolName", event);
             return;
         }
@@ -292,19 +312,18 @@ export class StreamHandler {
      * to our ChatMessages via piEntryId. This is needed for the fork feature
      * which sends { type: 'fork', entryId: '<id>' } to Pi.
      */
-    private handleAgentEnd(event: Record<string, unknown>): void {
+    private handleAgentEnd(event: RpcEvent): void {
         // agent_end may include the full message history with Pi's internal IDs
         const messages = event.messages as Array<Record<string, unknown>> | undefined;
         if (Array.isArray(messages)) {
-            console.log("[StreamHandler] agent_end received with", messages.length, "messages");
             // Future: map these IDs to ChatMessages for fork support
         }
     }
 
-    private handleToolExecutionEnd(event: Record<string, unknown>): void {
-        const toolCallId = event.toolCallId;
-        const toolName = event.toolName;
-        if (typeof toolCallId !== 'string' || typeof toolName !== 'string') {
+    private handleToolExecutionEnd(event: RpcEvent): void {
+        const toolCallId = event.toolCallId as string | undefined;
+        const toolName = event.toolName as string | undefined;
+        if (!toolCallId || !toolName) {
             console.warn("[StreamHandler] Invalid tool_execution_end: missing toolCallId or toolName", event);
             return;
         }
@@ -354,6 +373,21 @@ export class StreamHandler {
         return content
             .filter((block) => block.type === 'thinking')
             .map((block) => block.thinking as string)
+            .filter(Boolean)
+            .join('\n\n');
+    }
+
+    /**
+     * Extract text content from a complete AssistantMessage.
+     * The message's content array includes {type: "text", text: "..."} blocks.
+     */
+    private extractTextFromMessage(message: Record<string, unknown>): string {
+        const content = message.content as Array<Record<string, unknown>> | undefined;
+        if (!Array.isArray(content)) return '';
+
+        return content
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text as string)
             .filter(Boolean)
             .join('\n\n');
     }

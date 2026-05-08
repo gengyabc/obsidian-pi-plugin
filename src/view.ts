@@ -853,7 +853,6 @@ export class PiChatView extends ItemView {
                 this.app.vault,
             );
             if (path) {
-                console.log("[Pi Chat] Session saved to:", path);
             }
             return path;
         } catch (err) {
@@ -898,6 +897,12 @@ export class PiChatView extends ItemView {
         this.streamHandler.reset();
         this.setStreamingState(false);
 
+        // Clean up any active streaming component
+        if (this.streamingComponent) {
+            this.streamingComponent.unload();
+            this.streamingComponent = null;
+        }
+
         if (this.streamingMessageEl) {
             const contentEl = this.streamingMessageEl.querySelector(".pi-message-content");
             if (contentEl) {
@@ -907,10 +912,12 @@ export class PiChatView extends ItemView {
             this.streamingMessageEl = null;
         }
 
-        if (this.streamingComponent) {
-            this.streamingComponent.unload();
-            this.streamingComponent = null;
+        // Clear any pending stream content and timers
+        if (this.streamRenderTimer) {
+            clearTimeout(this.streamRenderTimer);
+            this.streamRenderTimer = null;
         }
+        this.pendingStreamContent = null;
     }
 
     /**
