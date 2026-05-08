@@ -105,12 +105,12 @@ export class CommandSuggest {
      */
     private async fetchCommands(): Promise<PiCommand[]> {
         if (!this.connection || !this.connection.isConnected()) {
-            return this.getFallbackCommands();
+            return [];
         }
 
         try {
             const response = await this.connection.send({ type: "get_commands" });
-            const commands = response.commands as Array<Record<string, unknown>> | undefined;
+            const commands = (response.data?.commands) as Array<Record<string, unknown>> | undefined;
             if (Array.isArray(commands)) {
                 this.cachedCommands = commands
                     .map((cmd) => ({
@@ -125,24 +125,7 @@ export class CommandSuggest {
             console.warn("[Pi Commands] Failed to fetch commands:", err);
         }
 
-        // Fall back to cached or static list
-        if (this.cachedCommands) {
-            return this.cachedCommands;
-        }
-        return this.getFallbackCommands();
-    }
-
-    /**
-     * Static fallback commands in case RPC fails.
-     */
-    private getFallbackCommands(): PiCommand[] {
-        return [
-            { name: "plan", description: "Create an implementation plan" },
-            { name: "report", description: "Write a session report" },
-            { name: "catchup", description: "Verify project state" },
-            { name: "loop", description: "Execute plan-implement-review cycle" },
-            { name: "swarm", description: "Multi-agent task execution" },
-            { name: "search", description: "Search the web" },
-        ];
+        // Fall back to cached list
+        return this.cachedCommands ?? [];
     }
 }

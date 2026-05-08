@@ -1010,7 +1010,7 @@ export class PiChatView extends ItemView {
             const conn = this.plugin.ensureConnection();
             this.commandSuggest.setConnection(conn);
         } catch {
-            // Connection may not be available yet — use fallback commands
+            // Connection may not be available yet — command suggest will return empty
         }
 
         this.commandSuggest.trigger((commandText) => {
