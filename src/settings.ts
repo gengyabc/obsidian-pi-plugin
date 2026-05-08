@@ -92,10 +92,10 @@ export class PiSettingTab extends PluginSettingTab {
         // Working directory
         new Setting(containerEl)
             .setName("Working directory")
-            .setDesc("Working directory for Pi (empty = vault root). Note: Not supported on mobile.")
+            .setDesc("Working directory for Pi (empty = parent folder of vault). Note: Not supported on mobile.")
             .addText((text) =>
                 text
-                    .setPlaceholder("Leave empty for vault root")
+                    .setPlaceholder("Parent folder of vault")
                     .setValue(this.plugin.settings.workingDirectory)
                     .onChange(async (value) => {
                         this.plugin.settings.workingDirectory = value;

@@ -373,14 +373,16 @@ export default class PiPlugin extends Plugin {
             this.connection = null;
         }
 
-        // Determine working directory: setting or vault root
+        // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
         if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
             new Notice("Pi plugin requires desktop Obsidian (mobile not supported). Please use Obsidian on desktop to connect to Pi.");
             throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
-        const vaultRoot = (adapter as any).getBasePath();
-        const cwd = this.settings.workingDirectory || vaultRoot;
+        const vaultRoot = (adapter as any).getBasePath() as string;
+        // Default to parent of vault root for broader project context
+        const defaultCwd = vaultRoot.includes('/') ? vaultRoot.substring(0, vaultRoot.lastIndexOf('/')) : vaultRoot;
+        const cwd = this.settings.workingDirectory || defaultCwd;
 
         const args: string[] = [];
         if (this.settings.defaultProvider) {
