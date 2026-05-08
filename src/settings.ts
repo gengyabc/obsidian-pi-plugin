@@ -1,5 +1,8 @@
 import { App, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import type PiPlugin from "./main";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
@@ -56,6 +59,35 @@ export const DEFAULT_SECRET_NAMES: Record<string, string> = {
     deepseek: "pi-deepseek-key",
 };
 
+/**
+ * Display names for providers
+ */
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+    anthropic: "Anthropic",
+    openai: "OpenAI",
+    bailian: "Bailian",
+    gemini: "Google Gemini",
+    deepseek: "DeepSeek",
+};
+
+/**
+ * Pi models.json structure (simplified)
+ */
+interface PiModelsConfig {
+    providers?: Record<string, {
+        apiKey?: string;
+        models?: Array<{ id: string; name?: string }>;
+    }>;
+}
+
+/**
+ * Pi settings.json structure (simplified)
+ */
+interface PiSettingsConfig {
+    defaultProvider?: string;
+    defaultModel?: string;
+}
+
 export class PiSettingTab extends PluginSettingTab {
     plugin: PiPlugin;
 
@@ -70,32 +102,11 @@ export class PiSettingTab extends PluginSettingTab {
 
         containerEl.createEl("h2", { text: "Pi Plugin Settings" });
 
-        // Core settings
-        new Setting(containerEl)
-            .setName("Pi binary path")
-            .setDesc("Full path to the pi executable, including filename (e.g. ~/.nvm/versions/node/v24.15.0/bin/pi). Default: pi")
-            .addText((text) =>
-                text
-                    .setPlaceholder("pi")
-                    .setValue(this.plugin.settings.piBinaryPath)
-                    .onChange(async (value) => {
-                        this.plugin.settings.piBinaryPath = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
+        // Pi binary path with platform-specific help
+        this.createPiBinaryPathSetting(containerEl);
 
-        new Setting(containerEl)
-            .setName("Node bin directory (optional)")
-            .setDesc("Directory containing the node binary (NOT the node binary itself). Leave empty for auto-detection. Needed when GUI apps can't find node (e.g. nvm/fnm users). Example: ~/.nvm/versions/node/v24.15.0/bin")
-            .addText((text) =>
-                text
-                    .setPlaceholder("~/.nvm/versions/node/v24.15.0/bin")
-                    .setValue(this.plugin.settings.nodePath)
-                    .onChange(async (value) => {
-                        this.plugin.settings.nodePath = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
+        // Node path with platform-specific help
+        this.createNodePathSetting(containerEl);
 
         new Setting(containerEl)
             .setName("RPC timeout (seconds)")
@@ -111,73 +122,8 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // API Keys section - using SecretStorage
-        containerEl.createEl("h3", { text: "API Keys (Secure Storage)" });
-        containerEl.createEl("p", {
-            text: "API keys are stored securely in your system keychain (macOS Keychain, Windows Credential Manager, Linux libsecret). This is safer than storing keys in plain text files that may sync across devices.",
-            cls: "setting-item-description"
-        });
-
-        // Helper to create secret setting
-        const createSecretSetting = (provider: string, displayName: string, description: string) => {
-            const defaultSecretName = DEFAULT_SECRET_NAMES[provider] || `pi-${provider}-key`;
-            const currentSecretName = this.plugin.settings.apiSecretNames?.[provider] || "";
-
-            new Setting(containerEl)
-                .setName(displayName)
-                .setDesc(description)
-                .addComponent((el) => {
-                    return new SecretComponent(this.app, el)
-                        .setValue(currentSecretName)
-                        .onChange(async (value) => {
-                            if (value) {
-                                this.plugin.settings.apiSecretNames = {
-                                    ...this.plugin.settings.apiSecretNames,
-                                    [provider]: value,
-                                };
-                            } else {
-                                // Remove the entry if cleared
-                                const updated = { ...this.plugin.settings.apiSecretNames };
-                                delete updated[provider];
-                                this.plugin.settings.apiSecretNames = updated;
-                            }
-                            await this.plugin.saveSettings();
-                        });
-                });
-        };
-
-        createSecretSetting("anthropic", "Anthropic API Key", "API key for Claude models (stored securely)");
-        createSecretSetting("openai", "OpenAI API Key", "API key for GPT models (stored securely)");
-        createSecretSetting("bailian", "Bailian API Key", "API key for Bailian/Alibaba Cloud models (stored securely)");
-        createSecretSetting("gemini", "Gemini API Key", "API key for Google Gemini models (stored securely)");
-        createSecretSetting("deepseek", "DeepSeek API Key", "API key for DeepSeek models (stored securely)");
-
-        // Environment variables section (alternative approach)
-        containerEl.createEl("h3", { text: "Environment Variables (Alternative)" });
-        containerEl.createEl("p", {
-            text: "Alternatively, you can use environment variables. This requires platform-specific setup to make env vars visible to GUI apps.",
-            cls: "setting-item-description"
-        });
-
-        new Setting(containerEl)
-            .setName("Environment variables (optional)")
-            .setDesc("Comma-separated env var names to pass to Pi (e.g. BAILIAN_API_KEY,OPENAI_API_KEY). GUI apps don't inherit shell env vars, so API keys set in your shell profile won't be visible to Obsidian.")
-            .addText((text) =>
-                text
-                    .setPlaceholder("BAILIAN_API_KEY")
-                    .setValue(this.plugin.settings.envVars)
-                    .onChange(async (value) => {
-                        this.plugin.settings.envVars = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        // Platform-specific instructions
-        containerEl.createEl("p", { text: "To make env vars visible to GUI apps:", cls: "setting-item-description" });
-        const envInstructions = containerEl.createEl("ul", { cls: "setting-item-description" });
-        envInstructions.createEl("li", { text: 'macOS: launchctl setenv VAR_NAME "value" (then restart Obsidian)' });
-        envInstructions.createEl("li", { text: 'Linux: Add to ~/.pam_environment or ~/.config/environment.d/*.conf (then restart)' });
-        envInstructions.createEl("li", { text: 'Windows: Use setx VAR_NAME "value" in terminal (then restart Obsidian)' });
+        // API Keys section - dynamically show based on pi config
+        this.createApiKeySettings(containerEl);
 
         // Working directory
         new Setting(containerEl)
@@ -193,32 +139,8 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Default provider and model
-        new Setting(containerEl)
-            .setName("Default provider")
-            .setDesc("Default LLM provider (e.g. anthropic, openai)")
-            .addText((text) =>
-                text
-                    .setPlaceholder("Leave empty for Pi default")
-                    .setValue(this.plugin.settings.defaultProvider)
-                    .onChange(async (value) => {
-                        this.plugin.settings.defaultProvider = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        new Setting(containerEl)
-            .setName("Default model")
-            .setDesc("Default model name (e.g. claude-sonnet-4)")
-            .addText((text) =>
-                text
-                    .setPlaceholder("Leave empty for Pi default")
-                    .setValue(this.plugin.settings.defaultModel)
-                    .onChange(async (value) => {
-                        this.plugin.settings.defaultModel = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
+        // Default provider and model (pre-fill from pi config)
+        this.createProviderModelSettings(containerEl);
 
         // Session persistence
         new Setting(containerEl)
@@ -262,5 +184,258 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+    }
+
+    private createPiBinaryPathSetting(containerEl: HTMLElement): void {
+        new Setting(containerEl)
+            .setName("Pi binary path")
+            .setDesc("Full path to the pi executable. Default: pi (uses PATH)")
+            .addText((text) =>
+                text
+                    .setPlaceholder("pi")
+                    .setValue(this.plugin.settings.piBinaryPath)
+                    .onChange(async (value) => {
+                        this.plugin.settings.piBinaryPath = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        // Platform-specific instructions
+        const platform = os.platform();
+        const helpDiv = containerEl.createDiv({ cls: "setting-item-description" });
+        helpDiv.style.marginLeft = "0";
+        helpDiv.style.marginTop = "0.5em";
+        helpDiv.style.marginBottom = "1em";
+
+        if (platform === "darwin") {
+            helpDiv.createEl("strong", { text: "macOS - Find your pi path:" });
+            const macList = helpDiv.createEl("ul");
+            macList.createEl("li", { text: "Open Terminal" });
+            macList.createEl("li", { text: "Run: which pi" });
+            macList.createEl("li", { text: "Copy the output (e.g. /Users/you/.nvm/versions/node/v24.15.0/bin/pi)" });
+            macList.createEl("li", { text: "Paste it into the field above" });
+        } else if (platform === "win32") {
+            helpDiv.createEl("strong", { text: "Windows - Find your pi path:" });
+            const winList = helpDiv.createEl("ul");
+            winList.createEl("li", { text: "Open PowerShell or Command Prompt:" });
+            const subList = winList.createEl("ul");
+            subList.createEl("li", { text: "PowerShell: run Get-Command pi | Select-Object -ExpandProperty Source" });
+            subList.createEl("li", { text: "CMD: run where pi" });
+            winList.createEl("li", { text: "Copy the output and paste above" });
+            winList.createEl("li", { text: "Note: Use forward slashes (/) or double backslashes (\\\\) in paths" });
+        } else {
+            helpDiv.createEl("strong", { text: "Linux - Find your pi path:" });
+            const linuxList = helpDiv.createEl("ul");
+            linuxList.createEl("li", { text: "Run: which pi" });
+            linuxList.createEl("li", { text: "Or check your shell's PATH configuration" });
+        }
+    }
+
+    private createNodePathSetting(containerEl: HTMLElement): void {
+        new Setting(containerEl)
+            .setName("Node bin directory (optional)")
+            .setDesc("Directory containing the node binary. Leave empty for auto-detection. Needed when GUI apps can't find node (nvm/fnm users).")
+            .addText((text) =>
+                text
+                    .setPlaceholder("~/.nvm/versions/node/v24.15.0/bin")
+                    .setValue(this.plugin.settings.nodePath)
+                    .onChange(async (value) => {
+                        this.plugin.settings.nodePath = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        // Platform-specific instructions
+        const platform = os.platform();
+        const helpDiv = containerEl.createDiv({ cls: "setting-item-description" });
+        helpDiv.style.marginLeft = "0";
+        helpDiv.style.marginTop = "0.5em";
+        helpDiv.style.marginBottom = "1em";
+
+        if (platform === "darwin") {
+            helpDiv.createEl("strong", { text: "macOS - Find your node directory:" });
+            const macList = helpDiv.createEl("ul");
+            macList.createEl("li", { text: "Open Terminal" });
+            macList.createEl("li", { text: "Run: which node" });
+            macList.createEl("li", { text: "The output will be like: /Users/you/.nvm/versions/node/v24.15.0/bin/node" });
+            macList.createEl("li", { text: "Use the directory part (without /node): /Users/you/.nvm/versions/node/v24.15.0/bin" });
+        } else if (platform === "win32") {
+            helpDiv.createEl("strong", { text: "Windows - Find your node directory:" });
+            const winList = helpDiv.createEl("ul");
+            winList.createEl("li", { text: "Open PowerShell or Command Prompt:" });
+            const subList = winList.createEl("ul");
+            subList.createEl("li", { text: "PowerShell: run Get-Command node | Select-Object -ExpandProperty Source" });
+            subList.createEl("li", { text: "CMD: run where node" });
+            winList.createEl("li", { text: "The output will be like: C:\\Program Files\\nodejs\\node.exe" });
+            winList.createEl("li", { text: "Use the directory part (without \\node.exe): C:\\Program Files\\nodejs" });
+            winList.createEl("li", { text: "Note: Use forward slashes (/) or double backslashes (\\\\) in paths" });
+        } else {
+            helpDiv.createEl("strong", { text: "Linux - Find your node directory:" });
+            const linuxList = helpDiv.createEl("ul");
+            linuxList.createEl("li", { text: "Run: which node" });
+            linuxList.createEl("li", { text: "Use the directory part (without /node)" });
+        }
+    }
+
+    private createApiKeySettings(containerEl: HTMLElement): void {
+        containerEl.createEl("h3", { text: "API Keys (Secure Storage)" });
+
+        // Read pi config to get configured providers
+        const piConfig = this.readPiConfig();
+        const configuredProviders = this.getConfiguredProviders(piConfig.modelsConfig);
+
+        containerEl.createEl("p", {
+            text: "API keys are stored securely in your system keychain. Only providers configured in your ~/.pi/agent/models.json are shown below.",
+            cls: "setting-item-description"
+        });
+
+        if (configuredProviders.length === 0) {
+            containerEl.createEl("p", {
+                text: "No providers found in your Pi configuration. Add providers to ~/.pi/agent/models.json first.",
+                cls: "setting-item-description"
+            });
+            return;
+        }
+
+        // Helper to create secret setting
+        const createSecretSetting = (provider: string, displayName: string) => {
+            const currentSecretName = this.plugin.settings.apiSecretNames?.[provider] || "";
+
+            new Setting(containerEl)
+                .setName(`${displayName} API Key`)
+                .setDesc(`API key for ${displayName} models`)
+                .addComponent((el) => {
+                    return new SecretComponent(this.app, el)
+                        .setValue(currentSecretName)
+                        .onChange(async (value) => {
+                            if (value) {
+                                this.plugin.settings.apiSecretNames = {
+                                    ...this.plugin.settings.apiSecretNames,
+                                    [provider]: value,
+                                };
+                            } else {
+                                // Remove the entry if cleared
+                                const updated = { ...this.plugin.settings.apiSecretNames };
+                                delete updated[provider];
+                                this.plugin.settings.apiSecretNames = updated;
+                            }
+                            await this.plugin.saveSettings();
+                        });
+                });
+        };
+
+        // Show API key inputs for each configured provider
+        for (const provider of configuredProviders) {
+            const displayName = PROVIDER_DISPLAY_NAMES[provider] || provider;
+            createSecretSetting(provider, displayName);
+        }
+    }
+
+    private createProviderModelSettings(containerEl: HTMLElement): void {
+        // Read pi config to get defaults
+        const piConfig = this.readPiConfig();
+        const piDefaults = piConfig.settingsConfig;
+
+        const defaultProvider = this.plugin.settings.defaultProvider || piDefaults?.defaultProvider || "";
+        const defaultModel = this.plugin.settings.defaultModel || piDefaults?.defaultModel || "";
+
+        const providerDesc = piDefaults?.defaultProvider
+            ? `Default LLM provider (from Pi config: ${piDefaults.defaultProvider})`
+            : "Default LLM provider (e.g. anthropic, openai)";
+
+        const modelDesc = piDefaults?.defaultModel
+            ? `Default model name (from Pi config: ${piDefaults.defaultModel})`
+            : "Default model name (e.g. claude-sonnet-4)";
+
+        new Setting(containerEl)
+            .setName("Default provider")
+            .setDesc(providerDesc)
+            .addText((text) =>
+                text
+                    .setPlaceholder("Leave empty for Pi default")
+                    .setValue(this.plugin.settings.defaultProvider)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultProvider = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName("Default model")
+            .setDesc(modelDesc)
+            .addText((text) =>
+                text
+                    .setPlaceholder("Leave empty for Pi default")
+                    .setValue(this.plugin.settings.defaultModel)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultModel = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+    }
+
+    /**
+     * Read pi's configuration files.
+     */
+    private readPiConfig(): { modelsConfig: PiModelsConfig | null; settingsConfig: PiSettingsConfig | null } {
+        const homeDir = os.homedir();
+        const piAgentDir = path.join(homeDir, ".pi", "agent");
+
+        let modelsConfig: PiModelsConfig | null = null;
+        let settingsConfig: PiSettingsConfig | null = null;
+
+        try {
+            const modelsPath = path.join(piAgentDir, "models.json");
+            if (fs.existsSync(modelsPath)) {
+                const content = fs.readFileSync(modelsPath, "utf-8");
+                modelsConfig = JSON.parse(content);
+            }
+        } catch (err) {
+            console.warn("[Pi Plugin] Failed to read models.json:", err);
+        }
+
+        try {
+            const settingsPath = path.join(piAgentDir, "settings.json");
+            if (fs.existsSync(settingsPath)) {
+                const content = fs.readFileSync(settingsPath, "utf-8");
+                settingsConfig = JSON.parse(content);
+            }
+        } catch (err) {
+            console.warn("[Pi Plugin] Failed to read settings.json:", err);
+        }
+
+        return { modelsConfig, settingsConfig };
+    }
+
+    /**
+     * Extract configured providers from pi's models.json.
+     * Returns providers that have an apiKey field (indicating they need user input).
+     */
+    private getConfiguredProviders(modelsConfig: PiModelsConfig | null): string[] {
+        if (!modelsConfig?.providers) {
+            // Default providers if config not found
+            return ["anthropic", "openai"];
+        }
+
+        const providers: string[] = [];
+        for (const [name, config] of Object.entries(modelsConfig.providers)) {
+            // Provider needs API key if it has an apiKey field (even if it's just an env var name)
+            if (config?.apiKey) {
+                providers.push(name);
+            }
+        }
+
+        // Sort: anthropic and openai first, then others alphabetically
+        const priority = ["anthropic", "openai"];
+        const sorted = providers.sort((a, b) => {
+            const aPriority = priority.indexOf(a);
+            const bPriority = priority.indexOf(b);
+            if (aPriority !== -1 && bPriority !== -1) return aPriority - bPriority;
+            if (aPriority !== -1) return -1;
+            if (bPriority !== -1) return 1;
+            return a.localeCompare(b);
+        });
+
+        return sorted.length > 0 ? sorted : ["anthropic", "openai"];
     }
 }
