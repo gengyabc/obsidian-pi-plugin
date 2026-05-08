@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import { PiConnection } from "./rpc";
-import { API_KEY_ENV_VARS, DEFAULT_SETTINGS, DEFAULT_SECRET_NAMES, PiSettingTab } from "./settings";
+import { DEFAULT_SETTINGS, PiSettingTab } from "./settings";
 import type { PiPluginSettings } from "./settings";
 import { PiChatView, VIEW_TYPE_PI_CHAT } from "./view";
 import { SessionManager } from "./sessions";

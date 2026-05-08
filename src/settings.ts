@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, SecretComponent, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting } from "obsidian";
 import type PiPlugin from "./main";
 import * as fs from "fs";
 import * as path from "path";
@@ -35,39 +35,6 @@ export const DEFAULT_SETTINGS: PiPluginSettings = {
     persistSessions: true,
     thinkingLevel: "medium",
     rpcTimeout: 60_000,  // 60 seconds default
-};
-
-/**
- * Mapping from provider name to standard env var name.
- */
-export const API_KEY_ENV_VARS: Record<string, string> = {
-    bailian: "BAILIAN_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    openai: "OPENAI_API_KEY",
-    gemini: "GOOGLE_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-};
-
-/**
- * Default secret names for each provider.
- */
-export const DEFAULT_SECRET_NAMES: Record<string, string> = {
-    anthropic: "pi-anthropic-key",
-    openai: "pi-openai-key",
-    bailian: "pi-bailian-key",
-    gemini: "pi-gemini-key",
-    deepseek: "pi-deepseek-key",
-};
-
-/**
- * Display names for providers
- */
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-    anthropic: "Anthropic",
-    openai: "OpenAI",
-    bailian: "Bailian",
-    gemini: "Google Gemini",
-    deepseek: "DeepSeek",
 };
 
 /**
@@ -121,9 +88,6 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-
-        // API Keys section - dynamically show based on pi config
-        this.createApiKeySettings(containerEl);
 
         // Working directory
         new Setting(containerEl)
@@ -277,59 +241,7 @@ export class PiSettingTab extends PluginSettingTab {
         }
     }
 
-    private createApiKeySettings(containerEl: HTMLElement): void {
-        containerEl.createEl("h3", { text: "API Keys (Secure Storage)" });
 
-        // Read pi config to get configured providers
-        const piConfig = this.readPiConfig();
-        const configuredProviders = this.getConfiguredProviders(piConfig.modelsConfig);
-
-        containerEl.createEl("p", {
-            text: "API keys are stored securely in your system keychain. Only providers configured in your ~/.pi/agent/models.json are shown below.",
-            cls: "setting-item-description"
-        });
-
-        if (configuredProviders.length === 0) {
-            containerEl.createEl("p", {
-                text: "No providers found in your Pi configuration. Add providers to ~/.pi/agent/models.json first.",
-                cls: "setting-item-description"
-            });
-            return;
-        }
-
-        // Helper to create secret setting
-        const createSecretSetting = (provider: string, displayName: string) => {
-            const currentSecretName = this.plugin.settings.apiSecretNames?.[provider] || "";
-
-            new Setting(containerEl)
-                .setName(`${displayName} API Key`)
-                .setDesc(`API key for ${displayName} models`)
-                .addComponent((el) => {
-                    return new SecretComponent(this.app, el)
-                        .setValue(currentSecretName)
-                        .onChange(async (value) => {
-                            if (value) {
-                                this.plugin.settings.apiSecretNames = {
-                                    ...this.plugin.settings.apiSecretNames,
-                                    [provider]: value,
-                                };
-                            } else {
-                                // Remove the entry if cleared
-                                const updated = { ...this.plugin.settings.apiSecretNames };
-                                delete updated[provider];
-                                this.plugin.settings.apiSecretNames = updated;
-                            }
-                            await this.plugin.saveSettings();
-                        });
-                });
-        };
-
-        // Show API key inputs for each configured provider
-        for (const provider of configuredProviders) {
-            const displayName = PROVIDER_DISPLAY_NAMES[provider] || provider;
-            createSecretSetting(provider, displayName);
-        }
-    }
 
     private createProviderModelSettings(containerEl: HTMLElement): void {
         // Read pi config to get defaults
@@ -405,37 +317,5 @@ export class PiSettingTab extends PluginSettingTab {
         }
 
         return { modelsConfig, settingsConfig };
-    }
-
-    /**
-     * Extract configured providers from pi's models.json.
-     * Returns providers that have an apiKey field (indicating they need user input).
-     */
-    private getConfiguredProviders(modelsConfig: PiModelsConfig | null): string[] {
-        if (!modelsConfig?.providers) {
-            // Default providers if config not found
-            return ["anthropic", "openai"];
-        }
-
-        const providers: string[] = [];
-        for (const [name, config] of Object.entries(modelsConfig.providers)) {
-            // Provider needs API key if it has an apiKey field (even if it's just an env var name)
-            if (config?.apiKey) {
-                providers.push(name);
-            }
-        }
-
-        // Sort: anthropic and openai first, then others alphabetically
-        const priority = ["anthropic", "openai"];
-        const sorted = providers.sort((a, b) => {
-            const aPriority = priority.indexOf(a);
-            const bPriority = priority.indexOf(b);
-            if (aPriority !== -1 && bPriority !== -1) return aPriority - bPriority;
-            if (aPriority !== -1) return -1;
-            if (bPriority !== -1) return 1;
-            return a.localeCompare(b);
-        });
-
-        return sorted.length > 0 ? sorted : ["anthropic", "openai"];
     }
 }
