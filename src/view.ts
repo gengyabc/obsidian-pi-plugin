@@ -88,6 +88,9 @@ export class PiChatView extends ItemView {
     /** Currently streaming assistant message element, used for live re-rendering */
     private streamingMessageEl: HTMLElement | null = null;
 
+    /** "Thinking" indicator shown while waiting for Pi's first response */
+    private thinkingIndicatorEl: HTMLElement | null = null;
+
     /** Component for the final markdown render after streaming completes */
     private streamingComponent: Component | null = null;
 
@@ -194,6 +197,7 @@ export class PiChatView extends ItemView {
 
         // Clean up streaming state
         this.streamHandler.reset();
+        this.removeThinkingIndicator();
         if (this.streamRenderTimer) {
             clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
@@ -623,6 +627,7 @@ export class PiChatView extends ItemView {
         // Reset stream handler and view
         this.streamHandler.reset();
         this.setStreamingState(false);
+        this.removeThinkingIndicator();
         this.clearMessages();
         this.currentSessionPath = null;
 
@@ -1418,13 +1423,20 @@ export class PiChatView extends ItemView {
                 .catch((err) => {
                     console.error("[Pi Chat] Failed to send message:", err);
                     new Notice("Failed to send message to Pi");
+                    this.removeThinkingIndicator();
                     if (!isSteering) {
                         this.setStreamingState(false);
                     }
                 });
+
+            // Show thinking indicator while waiting for Pi's response
+            if (!isSteering) {
+                this.showThinkingIndicator();
+            }
         } catch (err) {
             console.error("[Pi Chat] Failed to send message:", err);
             new Notice("Failed to send message to Pi");
+            this.removeThinkingIndicator();
             if (!isSteering) {
                 this.setStreamingState(false);
             }
@@ -1475,6 +1487,7 @@ export class PiChatView extends ItemView {
         this.readOnly = false;
         this.streamHandler.reset();
         this.resetRewindState();
+        this.removeThinkingIndicator();
 
         if (this.streamingComponent) {
             this.streamingComponent.unload();
@@ -1503,6 +1516,7 @@ export class PiChatView extends ItemView {
     handleDisconnect(): void {
         this.streamHandler.reset();
         this.setStreamingState(false);
+        this.removeThinkingIndicator();
 
         // Clean up any active streaming component
         if (this.streamingComponent) {
@@ -1571,6 +1585,37 @@ export class PiChatView extends ItemView {
                 this.readOnlyBanner.remove();
                 this.readOnlyBanner = null;
             }
+        }
+    }
+
+    /**
+     * Show "thinking" indicator while waiting for Pi to start responding.
+     */
+    private showThinkingIndicator(): void {
+        // Don't show if already exists or view is cleared
+        if (this.thinkingIndicatorEl || this.messages.length === 0) return;
+
+        this.thinkingIndicatorEl = this.messagesContainer.createDiv({
+            cls: "pi-thinking-indicator",
+        });
+
+        const label = this.thinkingIndicatorEl.createDiv({ cls: "pi-message-label" });
+        label.createSpan({ text: "Pi", cls: "pi-message-label-text" });
+
+        const content = this.thinkingIndicatorEl.createDiv({ cls: "pi-thinking-indicator-content" });
+        content.createSpan({ cls: "pi-thinking-dots" });
+        content.createSpan({ text: "Thinking…", cls: "pi-thinking-text" });
+
+        this.scrollToBottom();
+    }
+
+    /**
+     * Remove the thinking indicator (called when Pi starts responding or on error).
+     */
+    private removeThinkingIndicator(): void {
+        if (this.thinkingIndicatorEl) {
+            this.thinkingIndicatorEl.remove();
+            this.thinkingIndicatorEl = null;
         }
     }
 
@@ -1650,6 +1695,9 @@ export class PiChatView extends ItemView {
      * Handle streaming text update — debounced live markdown rendering.
      */
     private handleStreamUpdate(msg: ChatMessage): void {
+        // Remove thinking indicator when Pi starts responding
+        this.removeThinkingIndicator();
+
         if (!this.streamingMessageEl) {
             // First delta — create the assistant message container
             this.streamingMessageEl = this.messagesContainer.createDiv({
