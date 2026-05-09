@@ -116,10 +116,8 @@ export default class PiPlugin extends Plugin {
         const statusBarEl = this.addStatusBarItem();
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
-        // TODO P4-T6: Fork from previous message
-        // Requires tracking Pi's internal entry IDs from agent_end events.
-        // The piEntryId field is on ChatMessage but not yet populated.
-        // Implement when entry ID tracking is wired up in stream-handler.
+
+        
 
         console.log("[Pi Plugin] Loaded");
     }

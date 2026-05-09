@@ -308,15 +308,10 @@ export class StreamHandler {
 
     /**
      * Handle agent_end events which may contain entry IDs for fork support.
-     * TODO P4-T6: Extract entry IDs from the messages array and map them
-     * to our ChatMessages via piEntryId. This is needed for the fork feature
-     * which sends { type: 'fork', entryId: '<id>' } to Pi.
      */
     private handleAgentEnd(event: RpcEvent): void {
-        // agent_end may include the full message history with Pi's internal IDs
         const messages = event.messages as Array<Record<string, unknown>> | undefined;
         if (Array.isArray(messages)) {
-            // Future: map these IDs to ChatMessages for fork support
         }
     }
 
