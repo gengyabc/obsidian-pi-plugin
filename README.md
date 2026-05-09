@@ -97,6 +97,7 @@ graph LR
 | `src/renderer.ts` | Render messages as Obsidian markdown |
 | `src/session-scanner.ts` | Read Pi's native `.jsonl` session files |
 | `src/session-panel.ts` | Session browser sidebar |
+| `src/session-list.ts` | Session list modal for browsing saved conversations |
 | `src/message-store.ts` | Persistent message cache for session history |
 | `src/commands.ts` | `/` command suggest and palette registration |
 | `src/input.ts` | Chat input with auto-resize, paste, attachments |

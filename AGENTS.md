@@ -32,6 +32,7 @@ obsidian-pi-plugin/
 │   ├── sessions.ts          # Save/load conversations as markdown vault notes
 │   ├── session-scanner.ts   # Read Pi's native .jsonl session files
 │   ├── session-panel.ts     # Session browser sidebar
+│   ├── session-list.ts      # Session list modal for browsing saved conversations
 │   ├── message-store.ts     # Persistent message cache
 │   ├── statusbar.ts         # Status bar (model, tokens, cost)
 │   ├── attachments.ts       # File attachment picker
