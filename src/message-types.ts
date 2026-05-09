@@ -20,6 +20,10 @@ export interface ChatMessage {
     isSteering?: boolean;
     /** Pi's internal entry ID, used for fork/session operations */
     piEntryId?: string;
+    /** True when this UI user message can be forked/rewound */
+    canRewind?: boolean;
+    /** Optional debug text returned by get_fork_messages */
+    piForkText?: string;
 }
 
 /**

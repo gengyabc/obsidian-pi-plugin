@@ -1,5 +1,12 @@
 import { App, Component, MarkdownRenderer } from "obsidian";
 
+/** Actions available on a user message (e.g., rewind) */
+export interface UserMessageActions {
+    onRewind?: () => void;
+    rewindDisabled?: boolean;
+    rewindTitle?: string;
+}
+
 /**
  * Renders chat messages using Obsidian's native MarkdownRenderer.
  * This gives us Mermaid diagrams, wiki-links, callouts, code highlighting, etc.
@@ -55,8 +62,14 @@ export class MessageRenderer {
 
     /**
      * Render a user message in a styled container.
+     * Optional actions parameter allows adding rewind button.
      */
-    renderUserMessage(container: HTMLElement, text: string, isSteering?: boolean): HTMLElement {
+    renderUserMessage(
+        container: HTMLElement,
+        text: string,
+        isSteering?: boolean,
+        actions?: UserMessageActions,
+    ): HTMLElement {
         const cls = isSteering
             ? "pi-message pi-message-user pi-message-steer"
             : "pi-message pi-message-user";
@@ -66,6 +79,31 @@ export class MessageRenderer {
             text: isSteering ? "You (steer)" : "You",
             cls: "pi-message-label-text",
         });
+
+        // Add rewind action button if provided
+        if (actions?.onRewind) {
+            const actionBar = label.createSpan({ cls: "pi-message-actions" });
+            const btn = actionBar.createEl("button", {
+                cls: "pi-message-rewind-btn",
+                attr: {
+                    "aria-label": "Rewind to this message",
+                    title: actions.rewindTitle ?? "Rewind to this message",
+                    type: "button",
+                },
+            });
+            btn.setText("↩");
+
+            if (actions.rewindDisabled) {
+                btn.setAttribute("disabled", "true");
+                btn.addClass("is-disabled");
+            } else {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    actions.onRewind?.();
+                });
+            }
+        }
 
         const contentEl = wrapper.createDiv({ cls: "pi-message-content" });
         contentEl.createEl("p", { text });

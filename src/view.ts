@@ -13,6 +13,40 @@ import { SessionPanel } from "./session-panel";
 import type { PiSession } from "./session-scanner";
 import { unlink } from "fs/promises";
 
+// --- Rewind/Return Types ---
+interface PiStateData {
+    sessionFile?: string;
+    sessionId?: string;
+    sessionName?: string;
+    isStreaming?: boolean;
+    messageCount?: number;
+}
+
+interface ForkMessage {
+    entryId: string;
+    text: string;
+}
+
+interface ReturnCheckpoint {
+    sessionPath: string;
+    sessionId?: string;
+    sessionName?: string;
+    createdAt: number;
+    fromMessageId: string;
+    fromEntryId: string;
+}
+
+interface ExtensionUiRequest {
+    type: "extension_ui_request";
+    id: string;
+    method: string;
+    title?: string;
+    message?: string;
+    placeholder?: string;
+    options?: string[];
+    initialValue?: string;
+}
+
 export const VIEW_TYPE_PI_CHAT = "pi-chat-view";
 
 /**
@@ -42,6 +76,14 @@ export class PiChatView extends ItemView {
     private streaming = false;
     /** Current Pi session file path (for message store keying) */
     private currentSessionPath: string | null = null;
+    /** Return checkpoint for navigating back to original session after rewind */
+    private returnCheckpoint: ReturnCheckpoint | null = null;
+    /** Banner element showing "Return to latest" */
+    private returnBannerEl: HTMLElement | null = null;
+    /** Flag to prevent concurrent rewind operations */
+    private rewindBusy = false;
+    /** Chat body element (for inserting return banner above it) */
+    private chatBodyEl: HTMLElement | null = null;
 
     /** Currently streaming assistant message element, used for live re-rendering */
     private streamingMessageEl: HTMLElement | null = null;
@@ -54,6 +96,10 @@ export class PiChatView extends ItemView {
 
     /** Latest streamed content waiting to be rendered */
     private pendingStreamContent: string | null = null;
+
+    private rpcEventHandler: ((event: { type: string }) => void) | null = null;
+    private activeExtensionUiOwner: "rewind" | "return" | null = null;
+    private pendingRewindUiRequestIds = new Set<string>();
 
     constructor(leaf: WorkspaceLeaf, plugin: PiPlugin) {
         super(leaf);
@@ -94,6 +140,7 @@ export class PiChatView extends ItemView {
 
         // Chat body — session panel (hidden) + messages
         const chatBody = container.createDiv({ cls: "pi-chat-body" });
+        this.chatBodyEl = chatBody;
 
         // Session panel (sidebar within chat)
         this.sessionPanel = new SessionPanel(chatBody, {
@@ -166,6 +213,7 @@ export class PiChatView extends ItemView {
         }
         this.abortBtn = null;
         this.readOnlyBanner = null;
+        this.returnBannerEl = null;
         this.headerBar = null;
         this.headerSessionName = null;
         this.headerModel = null;
@@ -174,6 +222,15 @@ export class PiChatView extends ItemView {
             this.sessionPanel.destroy();
             this.sessionPanel = null;
         }
+        this.chatBodyEl = null;
+
+        const conn = this.plugin.connection;
+        if (conn && this.rpcEventHandler) {
+            conn.offEvent(this.rpcEventHandler);
+        }
+        this.rpcEventHandler = null;
+        this.activeExtensionUiOwner = null;
+        this.pendingRewindUiRequestIds.clear();
 
         // Clear view state
         this.messages = [];
@@ -222,13 +279,30 @@ export class PiChatView extends ItemView {
      */
     connectToRpc(): void {
         const conn = this.plugin.ensureConnection();
-        conn.onEvent((event) => {
+        if (this.rpcEventHandler) {
+            conn.offEvent(this.rpcEventHandler);
+        }
+
+        this.rpcEventHandler = (event) => {
+            if ((event.type as string) === "extension_ui_request") {
+                this.handleExtensionUiRequest(event as unknown as ExtensionUiRequest);
+                return;
+            }
+
             this.streamHandler.handleEvent(event);
-            // Refresh header on agent_end (model/stats may have changed)
             if ((event.type as string) === "agent_end") {
                 this.refreshHeader();
+                setTimeout(() => {
+                    this.updateCurrentSessionFromPi()
+                        .then(() => this.syncForkEntryIds())
+                        .catch((err) =>
+                            console.warn("[Pi Chat] Failed to sync fork ids after agent_end:", err),
+                        );
+                }, 0);
             }
-        });
+        };
+
+        conn.onEvent(this.rpcEventHandler);
         this.commandSuggest.setConnection(conn);
 
         // Initial header refresh + restore last session after connection
@@ -261,9 +335,13 @@ export class PiChatView extends ItemView {
                     const stored = this.plugin.messageStore.getMessages(sessionFile);
                     if (stored.length > 0) {
                         this.displayMessages(stored, false);
+                        // Sync fork entryIds after displaying stored messages
+                        await this.syncForkEntryIds();
                     } else {
                         // Fall back to loading from Pi
                         await this.loadMessagesFromPi();
+                        // Sync fork entryIds after loading from Pi
+                        await this.syncForkEntryIds();
                     }
                 }
             }
@@ -751,6 +829,521 @@ export class PiChatView extends ItemView {
         return "";
     }
 
+    // --- Rewind/Return RPC Helpers ---
+
+    /**
+     * Get current Pi session state via get_state RPC.
+     */
+    private async getPiState(): Promise<PiStateData | null> {
+        const conn = this.plugin.connection;
+        if (!conn?.isConnected()) return null;
+
+        try {
+            const response = await conn.send({ type: "get_state" });
+            return (response.data as PiStateData | undefined) ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Update currentSessionPath from Pi and sync to store/panel.
+     */
+    private async updateCurrentSessionFromPi(): Promise<void> {
+        const state = await this.getPiState();
+        if (!state?.sessionFile) return;
+
+        this.currentSessionPath = state.sessionFile;
+        this.plugin.messageStore.setLastSession(state.sessionFile);
+        this.plugin.scheduleStoreFlush();
+
+        this.sessionPanel?.setCurrentSession(state.sessionFile);
+        await this.refreshHeader();
+    }
+
+    /**
+     * Fetch forkable user messages from Pi via get_fork_messages RPC.
+     */
+    private async fetchForkMessages(): Promise<ForkMessage[]> {
+        const conn = this.plugin.connection;
+        if (!conn?.isConnected()) {
+            return [];
+        }
+
+        try {
+            const response = await conn.send({ type: "get_fork_messages" });
+            const data = response.data as { messages?: ForkMessage[] } | undefined;
+            return Array.isArray(data?.messages) ? data.messages : [];
+        } catch (err) {
+            console.warn("[Pi Chat] fetchForkMessages error:", err);
+            return [];
+        }
+    }
+
+    /**
+     * Normalize prompt text for comparison (strip whitespace and attachment markers).
+     */
+    private normalizePromptText(text: string): string {
+        return text
+            .replace(/\s+/g, " ")
+            .replace(/\bAttached:.*$/i, "")
+            .replace(/\b\d+ image\(s\) attached\b/i, "")
+            .trim();
+    }
+
+    /**
+     * Sync fork entryIds from Pi to UI messages.
+     * Called after agent_end, restore, switch, reload to bind rewind capability.
+     */
+    private async syncForkEntryIds(): Promise<void> {
+        if (this.readOnly) {
+            return;
+        }
+
+        const forkMessages = await this.fetchForkMessages();
+        const userMessages = this.messages.filter(
+            (msg) => msg.role === "user" && !msg.isSteering,
+        );
+
+        if (forkMessages.length !== userMessages.length) {
+            console.warn("[Pi Chat] Fork message count mismatch", {
+                userMessageCount: userMessages.length,
+                forkMessageCount: forkMessages.length,
+            });
+        }
+
+        for (let i = 0; i < userMessages.length; i++) {
+            const uiMsg = userMessages[i];
+            const forkMsg = forkMessages[i];
+
+            if (!forkMsg) {
+                uiMsg.piEntryId = undefined;
+                uiMsg.canRewind = false;
+                uiMsg.piForkText = undefined;
+                continue;
+            }
+
+            uiMsg.piEntryId = forkMsg.entryId;
+            uiMsg.canRewind = true;
+            uiMsg.piForkText = forkMsg.text;
+
+            const uiText = this.normalizePromptText(uiMsg.content);
+            const piText = this.normalizePromptText(forkMsg.text);
+
+            if (
+                uiText &&
+                piText &&
+                uiText !== piText &&
+                !uiText.startsWith(piText) &&
+                !piText.startsWith(uiText)
+            ) {
+                console.debug("[Pi Chat] Fork text mismatch; using order mapping", {
+                    index: i,
+                    uiText,
+                    piText,
+                });
+            }
+        }
+
+        if (this.currentSessionPath) {
+            this.plugin.messageStore.setMessages(this.currentSessionPath, this.messages);
+            this.plugin.scheduleStoreFlush();
+        }
+
+        this.rerenderMessages();
+    }
+
+    /**
+     * Re-render all messages (used after syncForkEntryIds changes canRewind flags).
+     */
+    private rerenderMessages(): void {
+        this.messagesContainer.empty();
+
+        for (const msg of this.messages) {
+            this.renderMessage(msg);
+        }
+
+        this.renderReturnBanner();
+        this.scrollToBottom();
+    }
+
+    private updateRewindButtonState(): void {
+        const disabled = this.streaming || this.rewindBusy;
+        const buttons = this.messagesContainer.querySelectorAll<HTMLButtonElement>(".pi-message-rewind-btn");
+
+        buttons.forEach((button) => {
+            button.disabled = disabled;
+            button.classList.toggle("is-disabled", disabled);
+        });
+    }
+
+    private resetRewindState(): void {
+        this.returnCheckpoint = null;
+        this.activeExtensionUiOwner = null;
+        this.pendingRewindUiRequestIds.clear();
+        this.renderReturnBanner();
+    }
+
+    private setRewindBusy(busy: boolean): void {
+        if (this.rewindBusy === busy) return;
+        this.rewindBusy = busy;
+        this.updateRewindButtonState();
+    }
+
+    /**
+     * Reload messages from Pi (clear + reload), used after rewind/return/switch.
+     */
+    private async reloadMessagesFromPi(): Promise<void> {
+        const conn = this.plugin.connection;
+        if (!conn?.isConnected()) return;
+
+        try {
+            const response = await conn.send({ type: "get_messages" });
+            const data = response.data as
+                | { messages?: Array<Record<string, unknown>> }
+                | undefined;
+
+            const rawMessages = data?.messages;
+
+            this.messages = [];
+            this.messagesContainer.empty();
+
+            if (Array.isArray(rawMessages)) {
+                for (const raw of rawMessages) {
+                    const msg = this.convertAgentMessage(raw);
+                    if (msg) this.messages.push(msg);
+                }
+            }
+
+            for (const msg of this.messages) {
+                this.renderMessage(msg);
+            }
+
+            if (this.currentSessionPath) {
+                this.plugin.messageStore.setMessages(this.currentSessionPath, this.messages);
+                this.plugin.scheduleStoreFlush();
+            }
+
+            await this.syncForkEntryIds();
+            this.renderReturnBanner();
+            this.scrollToBottom();
+        } catch (err) {
+            console.warn("[Pi Chat] get_messages failed:", err);
+            new Notice("Failed to load messages from Pi");
+        }
+    }
+
+    // --- Rewind/Return Core Logic ---
+
+    /**
+     * Rewind to a specific user message: fork before it and restore its text to input.
+     */
+    private async rewindToMessage(msg: ChatMessage): Promise<void> {
+        if (this.readOnly) {
+            new Notice("Cannot rewind a read-only saved session");
+            return;
+        }
+
+        if (this.streaming) {
+            new Notice("Wait for Pi to finish before rewinding");
+            return;
+        }
+
+        if (this.rewindBusy) {
+            return;
+        }
+
+        if (msg.role !== "user" || msg.isSteering) {
+            new Notice("Only normal user messages can be rewound");
+            return;
+        }
+
+        if (!msg.piEntryId) {
+            new Notice("This message is not rewindable yet");
+            await this.syncForkEntryIds();
+            return;
+        }
+
+        const conn = this.plugin.connection;
+        if (!conn?.isConnected()) {
+            new Notice("Not connected to Pi");
+            return;
+        }
+
+        this.setRewindBusy(true);
+        this.activeExtensionUiOwner = "rewind";
+        this.pendingRewindUiRequestIds.clear();
+
+        let forkSucceeded = false;
+
+        try {
+            const before = await this.getPiState();
+
+            if (!before?.sessionFile) {
+                new Notice("Cannot determine current Pi session");
+                return;
+            }
+
+            this.returnCheckpoint = {
+                sessionPath: before.sessionFile,
+                sessionId: before.sessionId,
+                sessionName: before.sessionName,
+                createdAt: Date.now(),
+                fromMessageId: msg.id,
+                fromEntryId: msg.piEntryId,
+            };
+
+            if (this.currentSessionPath && this.messages.length > 0) {
+                this.plugin.messageStore.setMessages(this.currentSessionPath, this.messages);
+                this.plugin.scheduleStoreFlush();
+            }
+
+            const response = await conn.send({
+                type: "fork",
+                entryId: msg.piEntryId,
+            });
+
+            const data = response.data as
+                | { text?: string; cancelled?: boolean }
+                | undefined;
+
+            if (data?.cancelled) {
+                this.resetRewindState();
+                new Notice("Rewind was cancelled by Pi");
+                return;
+            }
+
+            forkSucceeded = true;
+
+            await this.updateCurrentSessionFromPi();
+            await this.reloadMessagesFromPi();
+
+            const restoredText = data?.text ?? msg.piForkText ?? msg.content;
+
+            if (this.chatInput && restoredText) {
+                this.chatInput.setValue(restoredText);
+                this.chatInput.focus();
+            }
+
+            this.renderReturnBanner();
+            new Notice("Rewound. Edit the message or return to latest.");
+        } catch (err) {
+            console.error("[Pi Chat] Rewind failed:", err);
+            if (!forkSucceeded) {
+                this.resetRewindState();
+            } else {
+                this.renderReturnBanner();
+            }
+
+            const message = err instanceof Error ? err.message : String(err);
+            new Notice(`Rewind failed: ${message}`);
+        } finally {
+            this.activeExtensionUiOwner = null;
+            this.pendingRewindUiRequestIds.clear();
+            this.setRewindBusy(false);
+        }
+    }
+
+    /**
+     * Return to the original session before rewind.
+     */
+    private async returnToLatest(): Promise<void> {
+        if (!this.returnCheckpoint) return;
+
+        if (this.streaming) {
+            new Notice("Wait for Pi to finish before returning");
+            return;
+        }
+
+        if (this.rewindBusy) return;
+
+        const checkpoint = this.returnCheckpoint;
+        const conn = this.plugin.connection;
+
+        if (!conn?.isConnected()) {
+            new Notice("Not connected to Pi");
+            return;
+        }
+
+        this.setRewindBusy(true);
+        this.activeExtensionUiOwner = "return";
+
+        try {
+            const response = await conn.send({
+                type: "switch_session",
+                sessionPath: checkpoint.sessionPath,
+            });
+
+            const data = response.data as { cancelled?: boolean } | undefined;
+
+            if (data?.cancelled) {
+                new Notice("Return was cancelled by Pi");
+                return;
+            }
+
+            this.resetRewindState();
+
+            await this.updateCurrentSessionFromPi();
+            await this.reloadMessagesFromPi();
+
+            if (this.chatInput) {
+                this.chatInput.setValue("");
+                this.chatInput.focus();
+            }
+
+            this.renderReturnBanner();
+            new Notice("Returned to latest");
+        } catch (err) {
+            console.error("[Pi Chat] Return to latest failed:", err);
+
+            const message = err instanceof Error ? err.message : String(err);
+            new Notice(`Return failed: ${message}`);
+        } finally {
+            this.activeExtensionUiOwner = null;
+            this.setRewindBusy(false);
+        }
+    }
+
+    /**
+     * Handle extension UI requests that block RPC commands like fork().
+     */
+    private handleExtensionUiRequest(event: ExtensionUiRequest): void {
+        if (this.activeExtensionUiOwner === "rewind" && event.title === "Restore Options") {
+            this.pendingRewindUiRequestIds.add(event.id);
+        }
+
+        switch (event.method) {
+            case "select":
+                this.respondToExtensionSelect(event);
+                break;
+            case "confirm":
+                this.respondToExtensionConfirm(event);
+                break;
+            case "input":
+            case "editor":
+                this.respondToExtensionInput(event);
+                break;
+        }
+    }
+
+    private respondToExtensionSelect(event: ExtensionUiRequest): void {
+        const options = Array.isArray(event.options) ? event.options : [];
+        if (options.length === 0) {
+            this.cancelRewindAfterExtensionUi(event.id);
+            return;
+        }
+
+        const conversationOnly = options.find((option) =>
+            /^Conversation only\b/i.test(option),
+        );
+        if (event.title === "Restore Options" && conversationOnly) {
+            this.sendExtensionUiResponse(event.id, { value: conversationOnly });
+            return;
+        }
+
+        const promptText = [
+            event.title || "Choose an option",
+            ...options.map((option, index) => `${index + 1}. ${option}`),
+            "",
+            "Enter option number (ESC to cancel):",
+        ].join("\n");
+        const answer = window.prompt(promptText, "1");
+        if (answer === null) {
+            this.cancelRewindAfterExtensionUi(event.id);
+            return;
+        }
+
+        const index = Number.parseInt(answer, 10) - 1;
+        if (!Number.isInteger(index) || index < 0 || index >= options.length) {
+            new Notice("Invalid selection");
+            this.cancelRewindAfterExtensionUi(event.id);
+            return;
+        }
+
+        this.sendExtensionUiResponse(event.id, { value: options[index] });
+    }
+
+    private respondToExtensionConfirm(event: ExtensionUiRequest): void {
+        const confirmed = window.confirm(
+            [event.title, event.message].filter(Boolean).join("\n\n"),
+        );
+        this.sendExtensionUiResponse(event.id, { confirmed });
+    }
+
+    private respondToExtensionInput(event: ExtensionUiRequest): void {
+        const value = window.prompt(
+            [event.title, event.message].filter(Boolean).join("\n\n"),
+            event.initialValue ?? "",
+        );
+        if (value === null) {
+            this.cancelRewindAfterExtensionUi(event.id);
+            return;
+        }
+
+        this.sendExtensionUiResponse(event.id, { value });
+    }
+
+    private cancelRewindAfterExtensionUi(requestId: string): void {
+        this.sendExtensionUiResponse(requestId, { cancelled: true });
+
+        if (this.pendingRewindUiRequestIds.has(requestId)) {
+            this.pendingRewindUiRequestIds.delete(requestId);
+            this.resetRewindState();
+        }
+    }
+
+    private sendExtensionUiResponse(id: string, payload: Record<string, unknown>): void {
+        const conn = this.plugin.connection;
+        if (!conn?.isConnected()) return;
+
+        try {
+            conn.sendRaw({ type: "extension_ui_response", id, ...payload });
+        } catch (err) {
+            console.warn("[Pi Chat] Failed to answer extension UI request:", err);
+        }
+    }
+
+    /**
+     * Render the "Return to latest" banner above the messages area.
+     */
+    private renderReturnBanner(): void {
+        if (this.returnBannerEl) {
+            this.returnBannerEl.remove();
+            this.returnBannerEl = null;
+        }
+
+        if (!this.returnCheckpoint) return;
+
+        this.returnBannerEl = this.contentEl.createDiv({
+            cls: "pi-return-banner",
+        });
+
+        // Insert before chatBodyEl (headerBar is first, then banner, then chatBody)
+        if (this.chatBodyEl) {
+            this.contentEl.insertBefore(this.returnBannerEl, this.chatBodyEl);
+        }
+
+        const label = this.returnBannerEl.createSpan({
+            cls: "pi-return-banner-text",
+            text: "You are viewing a rewind fork.",
+        });
+
+        const btn = this.returnBannerEl.createEl("button", {
+            cls: "pi-return-latest-btn",
+            text: "Return to latest",
+            attr: {
+                type: "button",
+                title: "Return to the session state before rewind",
+            },
+        });
+
+        btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.returnToLatest();
+        });
+    }
+
     /**
      * Send a user message to Pi, with optional attachments and images.
      */
@@ -764,6 +1357,7 @@ export class PiChatView extends ItemView {
         this.userScrolledUp = false;
 
         const isSteering = this.streaming;
+        const shouldClearReturnCheckpoint = !isSteering && this.returnCheckpoint !== null;
 
         // Build the display text (include attachment names)
         let displayText = text;
@@ -815,7 +1409,19 @@ export class PiChatView extends ItemView {
         }
 
         try {
-            conn.send(command);
+            conn.send(command)
+                .then(() => {
+                    if (shouldClearReturnCheckpoint) {
+                        this.resetRewindState();
+                    }
+                })
+                .catch((err) => {
+                    console.error("[Pi Chat] Failed to send message:", err);
+                    new Notice("Failed to send message to Pi");
+                    if (!isSteering) {
+                        this.setStreamingState(false);
+                    }
+                });
         } catch (err) {
             console.error("[Pi Chat] Failed to send message:", err);
             new Notice("Failed to send message to Pi");
@@ -868,6 +1474,7 @@ export class PiChatView extends ItemView {
         this.messages = [];
         this.readOnly = false;
         this.streamHandler.reset();
+        this.resetRewindState();
 
         if (this.streamingComponent) {
             this.streamingComponent.unload();
@@ -983,6 +1590,7 @@ export class PiChatView extends ItemView {
                     : "Message Pi… (/ for commands, @ for files)",
             );
         }
+        this.updateRewindButtonState();
     }
 
     /**
@@ -1220,9 +1828,28 @@ export class PiChatView extends ItemView {
     private renderMessage(msg: ChatMessage): void {
         try {
             switch (msg.role) {
-                case "user":
-                    this.renderer.renderUserMessage(this.messagesContainer, msg.content, msg.isSteering);
+                case "user": {
+                    const canShowRewind =
+                        !this.readOnly &&
+                        !msg.isSteering &&
+                        !!msg.piEntryId;
+
+                    this.renderer.renderUserMessage(
+                        this.messagesContainer,
+                        msg.content,
+                        msg.isSteering,
+                        {
+                            onRewind: canShowRewind
+                                ? () => this.rewindToMessage(msg)
+                                : undefined,
+                            rewindDisabled: this.streaming || this.rewindBusy,
+                            rewindTitle: msg.piEntryId
+                                ? "Rewind to before this message"
+                                : "Waiting for Pi entry id",
+                        },
+                    );
                     break;
+                }
                 case "assistant":
                     this.renderer.renderAssistantMessage(
                         this.messagesContainer,

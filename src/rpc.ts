@@ -304,6 +304,18 @@ export class PiConnection {
     }
 
     /**
+     * Send a raw JSON line without request tracking.
+     * Used for extension UI responses in RPC mode.
+     */
+    sendRaw(command: Record<string, unknown>): void {
+        if (!this.process || !this.process.stdin || !this.connected) {
+            throw new Error("Pi is not connected");
+        }
+
+        this.process.stdin.write(JSON.stringify(command) + "\n");
+    }
+
+    /**
      * Register a handler for events received from Pi.
      * Each JSON line parsed from stdout is dispatched to all handlers.
      */
