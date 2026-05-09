@@ -32,6 +32,7 @@ export class ChatInput {
     private callbacks: ChatInputCallbacks;
     private attachments: Attachment[] = [];
     private enabled = true;
+    private isComposing = false;
 
     constructor(containerEl: HTMLElement, callbacks: ChatInputCallbacks) {
         this.containerEl = containerEl;
@@ -55,6 +56,15 @@ export class ChatInput {
         this.textareaEl.addEventListener("keydown", (e) => this.handleKeydown(e));
         this.textareaEl.addEventListener("input", () => this.autoResize());
         this.textareaEl.addEventListener("paste", (e) => this.handlePaste(e));
+        
+        // Listen for composition events to handle IME input properly
+        this.textareaEl.addEventListener("compositionstart", () => {
+            this.isComposing = true;
+        });
+        
+        this.textareaEl.addEventListener("compositionend", () => {
+            this.isComposing = false;
+        });
     }
 
     /**
@@ -153,9 +163,16 @@ export class ChatInput {
         if (!this.enabled) return;
 
         // Enter sends, Shift+Enter inserts newline
-        if (e.key === "Enter" && !e.shiftKey) {
+        // But only if we're not currently composing (IME input)
+        if (e.key === "Enter" && !e.shiftKey && !this.isComposing) {
             e.preventDefault();
             this.send();
+            return;
+        }
+
+        // When in composition mode, allow Enter to work normally for IME
+        if (e.key === "Enter" && !e.shiftKey && this.isComposing) {
+            // Don't prevent default so IME can handle the Enter key properly
             return;
         }
 
