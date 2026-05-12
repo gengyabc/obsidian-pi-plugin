@@ -11,6 +11,7 @@ import { AttachmentPicker } from "./attachments";
 import { SessionManager } from "./sessions";
 import { SessionPanel } from "./session-panel";
 import type { PiSession } from "./session-scanner";
+import { PermissionSelectModal, PermissionConfirmModal, PermissionInputModal } from "./permission-modal";
 import { unlink } from "fs/promises";
 
 // --- Rewind/Return Types ---
@@ -1238,6 +1239,7 @@ export class PiChatView extends ItemView {
             return;
         }
 
+        // Auto-respond for rewind restore options
         const conversationOnly = options.find((option) =>
             /^Conversation only\b/i.test(option),
         );
@@ -1246,46 +1248,49 @@ export class PiChatView extends ItemView {
             return;
         }
 
-        const promptText = [
+        // Use Obsidian Modal instead of window.prompt
+        new PermissionSelectModal(
+            this.app,
             event.title || "Choose an option",
-            ...options.map((option, index) => `${index + 1}. ${option}`),
-            "",
-            "Enter option number (ESC to cancel):",
-        ].join("\n");
-        const answer = window.prompt(promptText, "1");
-        if (answer === null) {
-            this.cancelRewindAfterExtensionUi(event.id);
-            return;
-        }
-
-        const index = Number.parseInt(answer, 10) - 1;
-        if (!Number.isInteger(index) || index < 0 || index >= options.length) {
-            new Notice("Invalid selection");
-            this.cancelRewindAfterExtensionUi(event.id);
-            return;
-        }
-
-        this.sendExtensionUiResponse(event.id, { value: options[index] });
+            options,
+            (response) => {
+                if (response.cancelled) {
+                    this.cancelRewindAfterExtensionUi(event.id);
+                } else {
+                    this.sendExtensionUiResponse(event.id, { value: response.value });
+                }
+            },
+        ).open();
     }
 
     private respondToExtensionConfirm(event: ExtensionUiRequest): void {
-        const confirmed = window.confirm(
-            [event.title, event.message].filter(Boolean).join("\n\n"),
-        );
-        this.sendExtensionUiResponse(event.id, { confirmed });
+        // Use Obsidian Modal instead of window.confirm
+        new PermissionConfirmModal(
+            this.app,
+            event.title || "Confirm",
+            event.message || "",
+            (response) => {
+                this.sendExtensionUiResponse(event.id, { confirmed: response.confirmed ?? false });
+            },
+        ).open();
     }
 
     private respondToExtensionInput(event: ExtensionUiRequest): void {
-        const value = window.prompt(
-            [event.title, event.message].filter(Boolean).join("\n\n"),
+        // Use Obsidian Modal instead of window.prompt
+        new PermissionInputModal(
+            this.app,
+            event.title || "Input",
+            event.message || "",
+            event.placeholder || "",
             event.initialValue ?? "",
-        );
-        if (value === null) {
-            this.cancelRewindAfterExtensionUi(event.id);
-            return;
-        }
-
-        this.sendExtensionUiResponse(event.id, { value });
+            (response) => {
+                if (response.cancelled) {
+                    this.cancelRewindAfterExtensionUi(event.id);
+                } else {
+                    this.sendExtensionUiResponse(event.id, { value: response.value ?? "" });
+                }
+            },
+        ).open();
     }
 
     private cancelRewindAfterExtensionUi(requestId: string): void {
