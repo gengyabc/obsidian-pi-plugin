@@ -1,8 +1,8 @@
 # Pi Plugin for Obsidian
 
-Chat with the [Pi coding agent](https://github.com/nicholasgasior/pi-coding-agent) inside Obsidian. Conversations render as native Obsidian markdown with full support for code highlighting, Mermaid diagrams, callouts, and wiki-links.
+Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) inside Obsidian. Conversations render as native Obsidian markdown with full support for code highlighting, Mermaid diagrams, callouts, and wiki-links.
 
-> **Desktop only.** Requires Pi installed locally (`npm i -g @mariozechner/pi-coding-agent`).
+> **Desktop only.** Requires Pi installed locally (`npm i -g @earendil-works/pi-coding-agent`).
 
 ## Features
 
@@ -38,7 +38,7 @@ Chat with the [Pi coding agent](https://github.com/nicholasgasior/pi-coding-agen
 
 ## Setup
 
-1. Install [Pi](https://github.com/nicholasgasior/pi-coding-agent) globally
+1. Install [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) globally
 2. Clone or download this repo
 3. `npm install && npm run build`
 4. Copy `main.js`, `styles.css`, and `manifest.json` to your vault's `.obsidian/plugins/pi-plugin/`

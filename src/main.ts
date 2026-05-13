@@ -391,8 +391,8 @@ export default class PiPlugin extends Plugin {
             args.push("--model", this.settings.defaultModel);
         }
 
-        // Retrieve API keys from SecretStorage asynchronously
-        const retrieveSecrets = async (): Promise<Record<string, string>> => {
+        // Retrieve API keys from SecretStorage synchronously.
+        const retrieveSecrets = (): Record<string, string> => {
             const secrets: Record<string, string> = {};
             const secretNames = this.settings.apiSecretNames || {};
 
@@ -419,65 +419,54 @@ export default class PiPlugin extends Plugin {
             return secrets;
         };
 
-        // Create connection with placeholder secrets (will be updated on connect)
-        this.connection = new PiConnection(
-            this.settings.piBinaryPath,
-            cwd,
-            args,
-            this.settings.nodePath,
-            this.settings.envVars,
-            {},  // Placeholder, updated below
-            this.settings.rpcTimeout
-        );
+        try {
+            // Create connection and connect immediately so chat actions can respond right away.
+            this.connection = new PiConnection(
+                this.settings.piBinaryPath,
+                cwd,
+                args,
+                this.settings.nodePath,
+                this.settings.envVars,
+                retrieveSecrets(),
+                this.settings.rpcTimeout
+            );
 
-        // Retrieve secrets and connect
-        retrieveSecrets().then((secrets) => {
-            if (this.connection) {
-                this.connection.setApiKeys(secrets);
-            }
+            this.connection.connect();
 
-            // Attempt to connect
-            try {
-                this.connection!.connect();
-
-                // Set up event handlers
-                this.connection!.onEvent((event) => {
-                    const type = event.type as string;
-                    if (type === "agent_start") {
-                        this.statusBar?.setStreaming(true);
-                    } else if (type === "agent_end") {
-                        this.statusBar?.setStreaming(false);
-                        this.statusBar?.refreshStats();
-                    } else if (type === "auto_compaction_end") {
-                        new Notice(t("notices.compacted"));
-                    }
-                });
-
-                this.connection!.onDisconnect(() => {
-                    const view = this.getActiveView();
-                    if (view) {
-                        view.handleDisconnect();
-                    }
-                    new Notice(t("notices.disconnected"));
-                    this.connection = null;
-                });
-
-                // Refresh status bar and register commands once connected
-                setTimeout(() => {
-                    this.statusBar?.refreshModel();
+            // Set up event handlers
+            this.connection.onEvent((event) => {
+                const type = event.type as string;
+                if (type === "agent_start") {
+                    this.statusBar?.setStreaming(true);
+                } else if (type === "agent_end") {
+                    this.statusBar?.setStreaming(false);
                     this.statusBar?.refreshStats();
-                    this.registerPiCommands();
-                }, 1000);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                console.error("[Pi Plugin] Failed to connect to Pi:", err);
-                new Notice(t("notices.startFailed", { msg }));
+                } else if (type === "auto_compaction_end") {
+                    new Notice(t("notices.compacted"));
+                }
+            });
+
+            this.connection.onDisconnect(() => {
+                const view = this.getActiveView();
+                if (view) {
+                    view.handleDisconnect();
+                }
+                new Notice(t("notices.disconnected"));
                 this.connection = null;
-            }
-        }).catch((err) => {
-            console.error("[Pi Plugin] Failed to retrieve secrets:", err);
-            new Notice(t("notices.secretsFailed"));
-        });
+            });
+
+            // Refresh status bar and register commands once connected
+            setTimeout(() => {
+                this.statusBar?.refreshModel();
+                this.statusBar?.refreshStats();
+                this.registerPiCommands();
+            }, 1000);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[Pi Plugin] Failed to connect to Pi:", err);
+            new Notice(t("notices.startFailed", { msg }));
+            this.connection = null;
+        }
 
         return this.connection!;
     }

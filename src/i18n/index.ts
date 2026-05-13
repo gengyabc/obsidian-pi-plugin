@@ -6,23 +6,22 @@
 import en from './en.json';
 import zh from './zh.json';
 
-const locales: Record<string, unknown> = { en, zh };
+type LocaleModule = Record<string, string> | { default?: Record<string, string> };
 
-/**
- * Get a nested string value from a JSON object using a dot-path key.
- * Returns undefined if the path doesn't resolve to a string.
- */
-function getNested(obj: unknown, path: string): string | undefined {
-    const parts = path.split('.');
-    let current: unknown = obj;
-    for (const part of parts) {
-        if (current == null || typeof current !== 'object') {
-            return undefined;
+function normalizeLocale(module: LocaleModule): Record<string, string> {
+    if (module && typeof module === 'object' && 'default' in module) {
+        const candidate = module.default;
+        if (candidate && typeof candidate === 'object') {
+            return candidate;
         }
-        current = (current as Record<string, unknown>)[part];
     }
-    return typeof current === 'string' ? current : undefined;
+    return module as Record<string, string>;
 }
+
+const locales: Record<string, Record<string, string>> = {
+    en: normalizeLocale(en as LocaleModule),
+    zh: normalizeLocale(zh as LocaleModule),
+};
 
 /**
  * Detect Obsidian's language setting from moment.js locale.
@@ -53,11 +52,12 @@ function escapeRegex(str: string): string {
 
 /**
  * Translation function with optional interpolation.
- * Keys match dot-paths in en.json/zh.json (e.g. 'settings.title').
+ * Keys match entries in en.json/zh.json (e.g. 'settings.title').
  * Interpolation: {{var}} replaced by vars[var].
  */
 export function t(key: string, vars?: Record<string, string | number>): string {
-    let str = getNested(locales[currentLang], key) ?? getNested(locales['en'], key);
+    const locale = locales[currentLang] ?? locales.en;
+    let str = Object.prototype.hasOwnProperty.call(locale, key) ? locale[key] : locales.en[key];
 
     if (str === undefined) {
         // eslint-disable-next-line no-console
