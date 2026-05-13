@@ -1,4 +1,5 @@
 import { App, Component, MarkdownRenderer } from "obsidian";
+import { t } from "./i18n/index";
 
 /** Actions available on a user message (e.g., rewind) */
 export interface UserMessageActions {
@@ -36,7 +37,7 @@ export class MessageRenderer {
         // Thinking block (collapsed) goes before the response text
         if (thinkingContent) {
             const thinkingEl = wrapper.createEl("details", { cls: "pi-thinking" });
-            thinkingEl.createEl("summary", { text: "Thinking…" });
+            thinkingEl.createEl("summary", { text: t("renderer.thinkingSummary") });
             const thinkingContentEl = thinkingEl.createDiv({ cls: "pi-thinking-content" });
             try {
                 MarkdownRenderer.render(this.app, thinkingContent, thinkingContentEl, sourcePath, component);
@@ -86,12 +87,12 @@ export class MessageRenderer {
             const btn = actionBar.createEl("button", {
                 cls: "pi-message-rewind-btn",
                 attr: {
-                    "aria-label": "Rewind to this message",
-                    title: actions.rewindTitle ?? "Rewind to this message",
+                    "aria-label": t("renderer.rewindTooltip"),
+                    title: actions.rewindTitle ?? t("renderer.rewindTooltip"),
                     type: "button",
                 },
             });
-            btn.setText("↩");
+            btn.setText(t("view.rewind"));
 
             if (actions.rewindDisabled) {
                 btn.setAttribute("disabled", "true");
@@ -140,7 +141,7 @@ export class MessageRenderer {
         // Render args if present
         if (args) {
             const argsSection = body.createDiv({ cls: "pi-tool-args" });
-            argsSection.createEl("div", { text: "Arguments", cls: "pi-tool-section-label" });
+            argsSection.createEl("div", { text: t("renderer.arguments"), cls: "pi-tool-section-label" });
             const argsCode = argsSection.createEl("pre");
             argsCode.createEl("code", { text: args });
         }
@@ -148,7 +149,7 @@ export class MessageRenderer {
         // Render result — use markdown rendering for rich content
         if (result) {
             const resultSection = body.createDiv({ cls: "pi-tool-result" });
-            resultSection.createEl("div", { text: "Result", cls: "pi-tool-section-label" });
+            resultSection.createEl("div", { text: t("renderer.result"), cls: "pi-tool-section-label" });
 
             const resultContent = resultSection.createDiv({ cls: "pi-tool-result-content" });
 

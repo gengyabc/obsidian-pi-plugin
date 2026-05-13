@@ -10,6 +10,7 @@ import { CommandSuggest } from "./commands";
 import type { PiCommand } from "./commands";
 import { MessageStore } from "./message-store";
 import type { MessageStoreData } from "./message-store";
+import { t } from "./i18n/index";
 
 interface ModelOption {
     id: string;
@@ -28,7 +29,7 @@ class ModelSwitchModal extends FuzzySuggestModal<ModelOption> {
         super(app);
         this.models = models;
         this.onSelect = onSelect;
-        this.setPlaceholder("Select a model...");
+        this.setPlaceholder(t("modals.selectModel"));
     }
 
     getItems(): ModelOption[] {
@@ -76,39 +77,39 @@ export default class PiPlugin extends Plugin {
         // Command: open chat view
         this.addCommand({
             id: "pi-open-chat",
-            name: "Open chat",
+            name: t("commands.openChat"),
             callback: () => this.activateView(),
         });
 
         this.addCommand({
             id: "pi-send-prompt",
-            name: "Send prompt",
+            name: t("commands.sendPrompt"),
             callback: () => this.sendTestPrompt(),
         });
 
         // Session management commands
         this.addCommand({
             id: "pi-save-session",
-            name: "Save conversation",
+            name: t("commands.saveSession"),
             callback: () => this.saveCurrentSession(),
         });
 
         this.addCommand({
             id: "pi-browse-sessions",
-            name: "Browse sessions",
+            name: t("commands.browseSessions"),
             callback: () => this.browseSessions(),
         });
 
         this.addCommand({
             id: "pi-new-session",
-            name: "New session",
+            name: t("commands.newSession"),
             callback: () => this.newSession(),
         });
 
         // Model switcher
         this.addCommand({
             id: "pi-switch-model",
-            name: "Switch model",
+            name: t("commands.switchModel"),
             callback: () => this.switchModel(),
         });
 
@@ -192,24 +193,24 @@ export default class PiPlugin extends Plugin {
     private async saveCurrentSession(): Promise<void> {
         const view = this.getActiveView();
         if (!view) {
-            new Notice("No active Pi chat");
+            new Notice(t("notices.noActiveChat"));
             return;
         }
         if (!view.hasMessages()) {
-            new Notice("No conversation to save");
+            new Notice(t("notices.noConversation"));
             return;
         }
 
         try {
             const path = await view.autoSave();
             if (path) {
-                new Notice(`Session saved to ${path}`);
+                new Notice(t("notices.savedTo", { path }));
             } else {
-                new Notice("Session not saved (persistence disabled or empty)");
+                new Notice(t("notices.saveDisabled"));
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            new Notice(`Failed to save session: ${msg}`);
+            new Notice(t("notices.saveFailed", { msg }));
         }
     }
 
@@ -223,7 +224,7 @@ export default class PiPlugin extends Plugin {
         );
 
         if (entries.length === 0) {
-            new Notice("No saved sessions found");
+            new Notice(t("notices.noSavedSessions"));
             return;
         }
 
@@ -238,10 +239,10 @@ export default class PiPlugin extends Plugin {
                     );
                     const view = await this.activateView();
                     view.displayMessages(messages, true);
-                    new Notice(`Loaded session: ${entry.date}`);
+                    new Notice(t("notices.loadedSession", { date: entry.date }));
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    new Notice(`Failed to load session: ${msg}`);
+                    new Notice(t("notices.loadFailed", { msg }));
                     console.error("[Pi Plugin] Load session error:", err);
                 }
             },
@@ -291,7 +292,7 @@ export default class PiPlugin extends Plugin {
             if (!this.dynamicCommandIds.includes(id)) {
                 this.addCommand({
                     id,
-                    name: `Pi: /${cmd.name}${cmd.description ? ` — ${cmd.description}` : ""}`,
+                    name: t("commands.piPrefix", { name: cmd.name, desc: cmd.description ? ` — ${cmd.description}` : "" }),
                     callback: () => {
                         this.sendPiCommand(cmd.name);
                     },
@@ -374,7 +375,7 @@ export default class PiPlugin extends Plugin {
         // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
         if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
-            new Notice("Pi plugin requires desktop Obsidian (mobile not supported). Please use Obsidian on desktop to connect to Pi.");
+            new Notice(t("notices.mobileUnsupported"));
             throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
         const vaultRoot = (adapter as any).getBasePath() as string;
@@ -448,7 +449,7 @@ export default class PiPlugin extends Plugin {
                         this.statusBar?.setStreaming(false);
                         this.statusBar?.refreshStats();
                     } else if (type === "auto_compaction_end") {
-                        new Notice("Pi conversation compacted");
+                        new Notice(t("notices.compacted"));
                     }
                 });
 
@@ -457,7 +458,7 @@ export default class PiPlugin extends Plugin {
                     if (view) {
                         view.handleDisconnect();
                     }
-                    new Notice("Pi disconnected. Use 'Pi: Send prompt' to reconnect.");
+                    new Notice(t("notices.disconnected"));
                     this.connection = null;
                 });
 
@@ -470,12 +471,12 @@ export default class PiPlugin extends Plugin {
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error("[Pi Plugin] Failed to connect to Pi:", err);
-                new Notice(`Failed to start Pi: ${msg}. Check binary path in settings.`);
+                new Notice(t("notices.startFailed", { msg }));
                 this.connection = null;
             }
         }).catch((err) => {
             console.error("[Pi Plugin] Failed to retrieve secrets:", err);
-            new Notice("Failed to retrieve API keys from secure storage");
+            new Notice(t("notices.secretsFailed"));
         });
 
         return this.connection!;
@@ -492,7 +493,7 @@ export default class PiPlugin extends Plugin {
             const models = (data?.models as Array<Record<string, unknown>>) ?? [];
 
             if (models.length === 0) {
-                new Notice("No models available");
+                new Notice(t("notices.noModels"));
                 return;
             }
 
@@ -509,18 +510,18 @@ export default class PiPlugin extends Plugin {
                         provider: selected.provider,
                         modelId: selected.id,
                     });
-                    new Notice(`Switched to ${selected.name}`);
+                    new Notice(t("notices.modelSwitched", { name: selected.name }));
                     this.statusBar?.setModel(selected.name, "");
                     this.statusBar?.refreshModel();
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    new Notice(`Failed to switch model: ${msg}`);
+                    new Notice(t("notices.modelSwitchFailed", { msg }));
                 }
             });
             modal.open();
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            new Notice(`Failed to fetch models: ${msg}`);
+            new Notice(t("notices.modelsFetchFailed", { msg }));
         }
     }
 
@@ -531,7 +532,7 @@ export default class PiPlugin extends Plugin {
         try {
             const conn = this.ensureConnection();
 
-            new Notice("Sending prompt to Pi...");
+            new Notice(t("notices.sending"));
 
             await conn.send({
                 type: "prompt",
@@ -539,7 +540,7 @@ export default class PiPlugin extends Plugin {
             });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            new Notice(`Pi error: ${msg}`);
+            new Notice(t("notices.piError", { msg }));
             console.error("[Pi Plugin] Error sending prompt:", err);
         }
     }

@@ -7,6 +7,7 @@
 
 import { App, FuzzySuggestModal, Notice, TFile } from "obsidian";
 import type { Attachment } from "./input";
+import { t } from "./i18n/index";
 
 /**
  * Modal that shows vault files with fuzzy search for @ references.
@@ -77,7 +78,7 @@ export class AttachmentPicker {
                     const stat = await this.app.vault.adapter.stat(file.path);
                     if (stat && stat.size > AttachmentPicker.MAX_FILE_SIZE) {
                         const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
-                        new Notice(`File too large (${sizeMB}MB). Max 1MB.`);
+                        new Notice(t("notices.fileTooLarge", { size: sizeMB }));
                         return;
                     }
 
@@ -91,7 +92,7 @@ export class AttachmentPicker {
                     onAttach(attachment);
                 } catch (err) {
                     console.error("[Pi Attachments] Failed to read file:", err);
-                    new Notice("Failed to read file");
+                    new Notice(t("notices.fileReadFailed"));
                 }
             },
         );

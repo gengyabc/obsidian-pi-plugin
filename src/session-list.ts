@@ -7,6 +7,7 @@
  */
 
 import { App, FuzzySuggestModal, TFile } from "obsidian";
+import { t } from "./i18n/index";
 
 export interface SessionEntry {
     file: TFile;
@@ -30,7 +31,7 @@ export class SessionListModal extends FuzzySuggestModal<SessionEntry> {
         super(app);
         this.entries = entries;
         this.onSelect = onSelect;
-        this.setPlaceholder("Browse saved sessions...");
+        this.setPlaceholder(t("sessionList.placeholder"));
     }
 
     getItems(): SessionEntry[] {
@@ -94,6 +95,9 @@ export async function buildSessionEntries(
     return entries;
 }
 
+/** Sentinel value for empty session preview (not translated). */
+export const EMPTY_PREVIEW = "__EMPTY_PREVIEW__";
+
 /**
  * Extract first user message as preview text.
  */
@@ -103,7 +107,7 @@ function extractPreview(content: string): string {
         const text = match[1].trim();
         return text.length > 60 ? text.slice(0, 60) + "…" : text;
     }
-    return "(empty session)";
+    return EMPTY_PREVIEW;
 }
 
 /**

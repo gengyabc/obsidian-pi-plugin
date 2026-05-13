@@ -8,6 +8,7 @@
 
 import { App, FuzzySuggestModal } from "obsidian";
 import type { PiConnection } from "./rpc";
+import { t } from "./i18n/index";
 
 export interface PiCommand {
     name: string;
@@ -26,7 +27,7 @@ class CommandSuggestModal extends FuzzySuggestModal<PiCommand> {
         super(app);
         this.commands = commands;
         this.onSelect = onSelect;
-        this.setPlaceholder("Select a command...");
+        this.setPlaceholder(t("modals.selectCommand"));
     }
 
     getItems(): PiCommand[] {

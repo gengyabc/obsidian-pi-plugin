@@ -7,6 +7,7 @@
  */
 
 import { App, Modal } from "obsidian";
+import { t } from "./i18n/index";
 
 type PermissionResponse = {
     value?: string;
@@ -57,7 +58,7 @@ export class PermissionSelectModal extends Modal {
         // Cancel button
         contentEl.createEl("button", {
             cls: "pi-permission-cancel-btn",
-            text: "Cancel",
+            text: t("modals.cancel"),
         }).addEventListener("click", () => {
             this.close();
         });
@@ -112,14 +113,14 @@ export class PermissionConfirmModal extends Modal {
         const buttonsContainer = contentEl.createDiv({ cls: "pi-permission-buttons" });
         buttonsContainer.createEl("button", {
             cls: "pi-permission-confirm-btn",
-            text: "Yes",
+            text: t("modals.confirmYes"),
         }).addEventListener("click", () => {
             this.confirmed = true;
             this.close();
         });
         buttonsContainer.createEl("button", {
             cls: "pi-permission-cancel-btn",
-            text: "No",
+            text: t("modals.confirmNo"),
         }).addEventListener("click", () => {
             this.close();
         });
@@ -190,14 +191,14 @@ export class PermissionInputModal extends Modal {
         const buttonsContainer = contentEl.createDiv({ cls: "pi-permission-buttons" });
         buttonsContainer.createEl("button", {
             cls: "pi-permission-confirm-btn",
-            text: "Submit",
+            text: t("modals.submit"),
         }).addEventListener("click", () => {
             this.inputValue = inputEl.value;
             this.close();
         });
         buttonsContainer.createEl("button", {
             cls: "pi-permission-cancel-btn",
-            text: "Cancel",
+            text: t("modals.cancel"),
         }).addEventListener("click", () => {
             this.inputValue = null;
             this.close();

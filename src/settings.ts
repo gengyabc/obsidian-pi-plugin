@@ -3,6 +3,7 @@ import type PiPlugin from "./main";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { t } from "./i18n/index";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
@@ -67,7 +68,7 @@ export class PiSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl("h2", { text: "Pi Plugin Settings" });
+        containerEl.createEl("h2", { text: t("settings.title") });
 
         // Pi binary path with platform-specific help
         this.createPiBinaryPathSetting(containerEl);
@@ -76,8 +77,8 @@ export class PiSettingTab extends PluginSettingTab {
         this.createNodePathSetting(containerEl);
 
         new Setting(containerEl)
-            .setName("RPC timeout (seconds)")
-            .setDesc("Timeout for RPC requests to Pi. Increase for slow operations like model switching.")
+            .setName(t("settings.rpcTimeout.name"))
+            .setDesc(t("settings.rpcTimeout.desc"))
             .addSlider((slider) =>
                 slider
                     .setLimits(10, 120, 5)
@@ -91,11 +92,11 @@ export class PiSettingTab extends PluginSettingTab {
 
         // Working directory
         new Setting(containerEl)
-            .setName("Working directory")
-            .setDesc("Working directory for Pi (empty = parent folder of vault). Note: Not supported on mobile.")
+            .setName(t("settings.workingDir.name"))
+            .setDesc(t("settings.workingDir.desc"))
             .addText((text) =>
                 text
-                    .setPlaceholder("Parent folder of vault")
+                    .setPlaceholder(t("settings.workingDir.placeholder"))
                     .setValue(this.plugin.settings.workingDirectory)
                     .onChange(async (value) => {
                         this.plugin.settings.workingDirectory = value;
@@ -108,11 +109,11 @@ export class PiSettingTab extends PluginSettingTab {
 
         // Session persistence
         new Setting(containerEl)
-            .setName("Session save directory")
-            .setDesc("Vault directory for saved conversations")
+            .setName(t("settings.sessionDir.name"))
+            .setDesc(t("settings.sessionDir.desc"))
             .addText((text) =>
                 text
-                    .setPlaceholder("Pi-Sessions")
+                    .setPlaceholder(t("settings.sessionDir.placeholder"))
                     .setValue(this.plugin.settings.sessionSaveDir)
                     .onChange(async (value) => {
                         this.plugin.settings.sessionSaveDir = value;
@@ -121,8 +122,8 @@ export class PiSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Persist sessions")
-            .setDesc("Automatically save conversations as vault notes")
+            .setName(t("settings.persistSessions.name"))
+            .setDesc(t("settings.persistSessions.desc"))
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.plugin.settings.persistSessions)
@@ -134,14 +135,14 @@ export class PiSettingTab extends PluginSettingTab {
 
         // Thinking level
         new Setting(containerEl)
-            .setName("Thinking level")
-            .setDesc("Level of thinking/reasoning for the model")
+            .setName(t("settings.thinkingLevel.name"))
+            .setDesc(t("settings.thinkingLevel.desc"))
             .addDropdown((dropdown) =>
                 dropdown
-                    .addOption("none", "None")
-                    .addOption("low", "Low")
-                    .addOption("medium", "Medium")
-                    .addOption("high", "High")
+                    .addOption("none", t("settings.thinkingLevel.none"))
+                    .addOption("low", t("settings.thinkingLevel.low"))
+                    .addOption("medium", t("settings.thinkingLevel.medium"))
+                    .addOption("high", t("settings.thinkingLevel.high"))
                     .setValue(this.plugin.settings.thinkingLevel)
                     .onChange(async (value) => {
                         this.plugin.settings.thinkingLevel = value;
@@ -152,11 +153,11 @@ export class PiSettingTab extends PluginSettingTab {
 
     private createPiBinaryPathSetting(containerEl: HTMLElement): void {
         new Setting(containerEl)
-            .setName("Pi binary path")
-            .setDesc("Full path to the pi executable. Default: pi (uses PATH)")
+            .setName(t("settings.piPath.name"))
+            .setDesc(t("settings.piPath.desc"))
             .addText((text) =>
                 text
-                    .setPlaceholder("pi")
+                    .setPlaceholder(t("settings.piPath.placeholder"))
                     .setValue(this.plugin.settings.piBinaryPath)
                     .onChange(async (value) => {
                         this.plugin.settings.piBinaryPath = value;
@@ -172,36 +173,36 @@ export class PiSettingTab extends PluginSettingTab {
         helpDiv.style.marginBottom = "1em";
 
         if (platform === "darwin") {
-            helpDiv.createEl("strong", { text: "macOS - Find your pi path:" });
+            helpDiv.createEl("strong", { text: t("settings.help.macosPi.title") });
             const macList = helpDiv.createEl("ul");
-            macList.createEl("li", { text: "Open Terminal" });
-            macList.createEl("li", { text: "Run: which pi" });
-            macList.createEl("li", { text: "Copy the output (e.g. /Users/you/.nvm/versions/node/v24.15.0/bin/pi)" });
-            macList.createEl("li", { text: "Paste it into the field above" });
+            macList.createEl("li", { text: t("settings.help.macosPi.step1") });
+            macList.createEl("li", { text: t("settings.help.macosPi.step2") });
+            macList.createEl("li", { text: t("settings.help.macosPi.step3") });
+            macList.createEl("li", { text: t("settings.help.macosPi.step4") });
         } else if (platform === "win32") {
-            helpDiv.createEl("strong", { text: "Windows - Find your pi path:" });
+            helpDiv.createEl("strong", { text: t("settings.help.windowsPi.title") });
             const winList = helpDiv.createEl("ul");
-            winList.createEl("li", { text: "Open PowerShell or Command Prompt:" });
+            winList.createEl("li", { text: t("settings.help.windowsPi.step1") });
             const subList = winList.createEl("ul");
-            subList.createEl("li", { text: "PowerShell: run Get-Command pi | Select-Object -ExpandProperty Source" });
-            subList.createEl("li", { text: "CMD: run where pi" });
-            winList.createEl("li", { text: "Copy the output and paste above" });
-            winList.createEl("li", { text: "Note: Use forward slashes (/) or double backslashes (\\\\) in paths" });
+            subList.createEl("li", { text: t("settings.help.windowsPi.powershell") });
+            subList.createEl("li", { text: t("settings.help.windowsPi.cmd") });
+            winList.createEl("li", { text: t("settings.help.windowsPi.step3") });
+            winList.createEl("li", { text: t("settings.help.windowsPi.step4") });
         } else {
-            helpDiv.createEl("strong", { text: "Linux - Find your pi path:" });
+            helpDiv.createEl("strong", { text: t("settings.help.linuxPi.title") });
             const linuxList = helpDiv.createEl("ul");
-            linuxList.createEl("li", { text: "Run: which pi" });
-            linuxList.createEl("li", { text: "Or check your shell's PATH configuration" });
+            linuxList.createEl("li", { text: t("settings.help.linuxPi.step1") });
+            linuxList.createEl("li", { text: t("settings.help.linuxPi.step2") });
         }
     }
 
     private createNodePathSetting(containerEl: HTMLElement): void {
         new Setting(containerEl)
-            .setName("Node bin directory (optional)")
-            .setDesc("Directory containing the node binary. Leave empty for auto-detection. Needed when GUI apps can't find node (nvm/fnm users).")
+            .setName(t("settings.nodePath.name"))
+            .setDesc(t("settings.nodePath.desc"))
             .addText((text) =>
                 text
-                    .setPlaceholder("~/.nvm/versions/node/v24.15.0/bin")
+                    .setPlaceholder(t("settings.nodePath.placeholder"))
                     .setValue(this.plugin.settings.nodePath)
                     .onChange(async (value) => {
                         this.plugin.settings.nodePath = value;
@@ -217,27 +218,27 @@ export class PiSettingTab extends PluginSettingTab {
         helpDiv.style.marginBottom = "1em";
 
         if (platform === "darwin") {
-            helpDiv.createEl("strong", { text: "macOS - Find your node directory:" });
+            helpDiv.createEl("strong", { text: t("settings.help.macosNode.title") });
             const macList = helpDiv.createEl("ul");
-            macList.createEl("li", { text: "Open Terminal" });
-            macList.createEl("li", { text: "Run: which node" });
-            macList.createEl("li", { text: "The output will be like: /Users/you/.nvm/versions/node/v24.15.0/bin/node" });
-            macList.createEl("li", { text: "Use the directory part (without /node): /Users/you/.nvm/versions/node/v24.15.0/bin" });
+            macList.createEl("li", { text: t("settings.help.macosNode.step1") });
+            macList.createEl("li", { text: t("settings.help.macosNode.step2") });
+            macList.createEl("li", { text: t("settings.help.macosNode.step3") });
+            macList.createEl("li", { text: t("settings.help.macosNode.step4") });
         } else if (platform === "win32") {
-            helpDiv.createEl("strong", { text: "Windows - Find your node directory:" });
+            helpDiv.createEl("strong", { text: t("settings.help.windowsNode.title") });
             const winList = helpDiv.createEl("ul");
-            winList.createEl("li", { text: "Open PowerShell or Command Prompt:" });
+            winList.createEl("li", { text: t("settings.help.windowsNode.step1") });
             const subList = winList.createEl("ul");
-            subList.createEl("li", { text: "PowerShell: run Get-Command node | Select-Object -ExpandProperty Source" });
-            subList.createEl("li", { text: "CMD: run where node" });
-            winList.createEl("li", { text: "The output will be like: C:\\Program Files\\nodejs\\node.exe" });
-            winList.createEl("li", { text: "Use the directory part (without \\node.exe): C:\\Program Files\\nodejs" });
-            winList.createEl("li", { text: "Note: Use forward slashes (/) or double backslashes (\\\\) in paths" });
+            subList.createEl("li", { text: t("settings.help.windowsNode.powershell") });
+            subList.createEl("li", { text: t("settings.help.windowsNode.cmd") });
+            winList.createEl("li", { text: t("settings.help.windowsNode.step3") });
+            winList.createEl("li", { text: t("settings.help.windowsNode.step4") });
+            winList.createEl("li", { text: t("settings.help.windowsNode.step5") });
         } else {
-            helpDiv.createEl("strong", { text: "Linux - Find your node directory:" });
+            helpDiv.createEl("strong", { text: t("settings.help.linuxNode.title") });
             const linuxList = helpDiv.createEl("ul");
-            linuxList.createEl("li", { text: "Run: which node" });
-            linuxList.createEl("li", { text: "Use the directory part (without /node)" });
+            linuxList.createEl("li", { text: t("settings.help.linuxNode.step1") });
+            linuxList.createEl("li", { text: t("settings.help.linuxNode.step2") });
         }
     }
 
@@ -252,19 +253,19 @@ export class PiSettingTab extends PluginSettingTab {
         const defaultModel = this.plugin.settings.defaultModel || piDefaults?.defaultModel || "";
 
         const providerDesc = piDefaults?.defaultProvider
-            ? `Default LLM provider (from Pi config: ${piDefaults.defaultProvider})`
-            : "Default LLM provider (e.g. anthropic, openai)";
+            ? t("settings.defaultProvider.descConfig", { provider: piDefaults.defaultProvider })
+            : t("settings.defaultProvider.desc");
 
         const modelDesc = piDefaults?.defaultModel
-            ? `Default model name (from Pi config: ${piDefaults.defaultModel})`
-            : "Default model name (e.g. claude-sonnet-4)";
+            ? t("settings.defaultModel.descConfig", { model: piDefaults.defaultModel })
+            : t("settings.defaultModel.desc");
 
         new Setting(containerEl)
-            .setName("Default provider")
+            .setName(t("settings.defaultProvider.name"))
             .setDesc(providerDesc)
             .addText((text) =>
                 text
-                    .setPlaceholder("Leave empty for Pi default")
+                    .setPlaceholder(t("settings.defaultProvider.placeholder"))
                     .setValue(this.plugin.settings.defaultProvider)
                     .onChange(async (value) => {
                         this.plugin.settings.defaultProvider = value;
@@ -273,11 +274,11 @@ export class PiSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Default model")
+            .setName(t("settings.defaultModel.name"))
             .setDesc(modelDesc)
             .addText((text) =>
                 text
-                    .setPlaceholder("Leave empty for Pi default")
+                    .setPlaceholder(t("settings.defaultModel.placeholder"))
                     .setValue(this.plugin.settings.defaultModel)
                     .onChange(async (value) => {
                         this.plugin.settings.defaultModel = value;

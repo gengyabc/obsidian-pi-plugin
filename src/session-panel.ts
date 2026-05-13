@@ -8,6 +8,8 @@
 import { Notice } from "obsidian";
 import { SessionScanner } from "./session-scanner";
 import type { PiSession } from "./session-scanner";
+import { t } from "./i18n/index";
+import { EMPTY_PREVIEW } from "./session-list";
 
 export interface SessionPanelCallbacks {
     /** Switch to the selected session */
@@ -42,11 +44,11 @@ export class SessionPanel {
 
         // Panel header
         const header = this.containerEl.createDiv({ cls: "pi-session-panel-header" });
-        header.createSpan({ text: "Sessions", cls: "pi-session-panel-title" });
+        header.createSpan({ text: t("sessionPanel.title"), cls: "pi-session-panel-title" });
 
         const closeBtn = header.createEl("button", {
             cls: "pi-session-panel-close",
-            attr: { "aria-label": "Close panel" },
+            attr: { "aria-label": t("sessionPanel.close.tooltip") },
         });
         closeBtn.setText("×");
         closeBtn.addEventListener("click", () => this.hide());
@@ -54,7 +56,7 @@ export class SessionPanel {
         // Search input
         this.searchEl = this.containerEl.createEl("input", {
             cls: "pi-session-panel-search",
-            attr: { type: "text", placeholder: "Filter sessions…" },
+            attr: { type: "text", placeholder: t("sessionPanel.filterPlaceholder") },
         });
         this.searchEl.addEventListener("input", () => this.renderList());
 
@@ -120,7 +122,7 @@ export class SessionPanel {
             this.listEl.empty();
             this.listEl.createDiv({
                 cls: "pi-session-panel-empty",
-                text: "Failed to load sessions",
+                text: t("sessionPanel.failedLoad"),
             });
         }
     }
@@ -151,8 +153,8 @@ export class SessionPanel {
             this.listEl.createDiv({
                 cls: "pi-session-panel-empty",
                 text: this.sessions.length === 0
-                    ? "No sessions found"
-                    : "No matching sessions",
+                    ? t("sessionPanel.empty")
+                    : t("sessionPanel.noMatch"),
             });
             return;
         }
@@ -181,7 +183,7 @@ export class SessionPanel {
         // Metadata line: date, message count, cwd
         const meta = content.createDiv({ cls: "pi-session-entry-meta" });
         meta.createSpan({ text: this.formatDate(session.mtime) });
-        meta.createSpan({ text: ` · ${session.messageCount} msgs` });
+        meta.createSpan({ text: ` · ${t("sessionPanel.msgCount", { count: session.messageCount })}` });
         if (session.cwd) {
             meta.createSpan({
                 text: ` · ${session.cwd}`,
@@ -190,7 +192,7 @@ export class SessionPanel {
         }
 
         // Preview
-        if (session.preview && session.preview !== "(empty session)") {
+        if (session.preview && session.preview !== EMPTY_PREVIEW) {
             content.createDiv({
                 cls: "pi-session-entry-preview",
                 text: session.preview,
@@ -202,7 +204,7 @@ export class SessionPanel {
 
         const exportBtn = actions.createEl("button", {
             cls: "pi-session-action-btn",
-            attr: { "aria-label": "Export to vault", title: "Export to vault" },
+            attr: { "aria-label": t("sessionPanel.export.tooltip"), title: t("sessionPanel.export.tooltip") },
         });
         exportBtn.setText("📄");
         exportBtn.addEventListener("click", (e) => {
@@ -212,7 +214,7 @@ export class SessionPanel {
 
         const deleteBtn = actions.createEl("button", {
             cls: "pi-session-action-btn pi-session-action-delete",
-            attr: { "aria-label": "Delete session", title: "Delete session" },
+            attr: { "aria-label": t("sessionPanel.delete.tooltip"), title: t("sessionPanel.delete.tooltip") },
         });
         deleteBtn.setText("🗑");
         deleteBtn.addEventListener("click", (e) => {
@@ -229,7 +231,7 @@ export class SessionPanel {
         )?.closest(".pi-session-entry");
 
         // Use Notice for confirmation since we can't easily do inline confirm
-        const confirmed = confirm(`Delete session "${session.name}"?\nThis cannot be undone.`);
+        const confirmed = confirm(t("sessionPanel.confirmDelete", { name: session.name }));
         if (!confirmed) return;
 
         try {
@@ -237,10 +239,10 @@ export class SessionPanel {
             // Remove from local list and re-render
             this.sessions = this.sessions.filter((s) => s.path !== session.path);
             this.renderList();
-            new Notice(`Deleted session: ${session.name}`);
+            new Notice(t("notices.deletedSession", { name: session.name }));
         } catch (err) {
             console.error("[SessionPanel] Delete failed:", err);
-            new Notice("Failed to delete session");
+            new Notice(t("notices.deleteFailed"));
         }
     }
 
@@ -254,8 +256,8 @@ export class SessionPanel {
 
         const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
-        if (isToday) return `Today ${time}`;
-        if (isYesterday) return `Yesterday ${time}`;
+        if (isToday) return t("sessionPanel.today", { time });
+        if (isYesterday) return t("sessionPanel.yesterday", { time });
 
         return d.toLocaleDateString(undefined, {
             month: "short",

@@ -1,5 +1,6 @@
 import { Component, ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
 import type PiPlugin from "./main";
+import { t } from "./i18n/index";
 import { MessageRenderer } from "./renderer";
 import { StreamHandler } from "./stream-handler";
 import type { ChatMessage } from "./message-types";
@@ -116,8 +117,8 @@ export class PiChatView extends ItemView {
             onMessageUpdate: (msg) => this.handleStreamUpdate(msg),
             onMessageComplete: (msg) => this.handleStreamComplete(msg),
             onToolResult: (msg) => this.addMessage(msg),
-            onCompaction: () => new Notice("Pi conversation compacted"),
-            onError: (err) => new Notice(`Pi error: ${err}`),
+            onCompaction: () => new Notice(t("notices.compacted")),
+            onError: (err) => new Notice(t("notices.piError", { msg: err })),
         });
     }
 
@@ -126,7 +127,7 @@ export class PiChatView extends ItemView {
     }
 
     getDisplayText(): string {
-        return "Pi Chat";
+        return t("view.title");
     }
 
     getIcon(): string {
@@ -167,7 +168,7 @@ export class PiChatView extends ItemView {
         // Add abort button to the input area (hidden by default)
         this.abortBtn = this.chatInput.getInputAreaEl().createEl("button", {
             cls: "pi-abort-btn",
-            text: "Abort",
+            text: t("view.abort"),
             attr: { style: "display: none;" },
         });
         this.abortBtn.addEventListener("click", () => this.abortStream());
@@ -364,9 +365,9 @@ export class PiChatView extends ItemView {
         // Session name — click to edit
         this.headerSessionName = left.createSpan({
             cls: "pi-header-session-name",
-            text: "New Session",
+            text: t("view.newSession"),
         });
-        this.headerSessionName.setAttribute("title", "Click to rename session");
+        this.headerSessionName.setAttribute("title", t("view.sessionName.tooltip"));
         this.headerSessionName.addEventListener("click", () => this.startEditingSessionName());
 
         // Model badge
@@ -386,7 +387,7 @@ export class PiChatView extends ItemView {
         // Sessions toggle button
         const sessionsBtn = right.createEl("button", {
             cls: "pi-header-sessions-btn",
-            attr: { "aria-label": "Browse sessions" },
+            attr: { "aria-label": t("view.sessionsBtn.tooltip") },
         });
         sessionsBtn.setText("📋");
         sessionsBtn.addEventListener("click", () => this.sessionPanel?.toggle());
@@ -394,7 +395,7 @@ export class PiChatView extends ItemView {
         // New session button
         const newBtn = right.createEl("button", {
             cls: "pi-header-new-btn",
-            attr: { "aria-label": "New session" },
+            attr: { "aria-label": t("view.newBtn.tooltip") },
         });
         newBtn.setText("+ New");
         newBtn.addEventListener("click", () => this.newSessionFromHeader());
@@ -479,7 +480,7 @@ export class PiChatView extends ItemView {
                     await conn.send({ type: "set_session_name", name: newName });
                 } catch (err) {
                     console.warn("[Pi Chat] Failed to rename session:", err);
-                    new Notice("Failed to rename session");
+                    new Notice(t("notices.renameFailed"));
                     // Revert
                     if (this.headerSessionName) {
                         this.headerSessionName.setText(currentName);
@@ -638,7 +639,7 @@ export class PiChatView extends ItemView {
                 const response = await conn.send({ type: "new_session" });
                 const data = response.data as Record<string, unknown> | undefined;
                 if (data?.cancelled) {
-                    new Notice("New session was cancelled by an extension");
+                    new Notice(t("notices.newSessionCancelled"));
                     return;
                 }
             } catch (err) {
@@ -667,11 +668,11 @@ export class PiChatView extends ItemView {
         }
 
         // Reset header
-        if (this.headerSessionName) this.headerSessionName.setText("New Session");
+        if (this.headerSessionName) this.headerSessionName.setText(t("view.newSession"));
         this.sessionPanel?.setCurrentSession(this.currentSessionPath);
         this.plugin.statusBar?.refreshModel();
         this.refreshHeader();
-        new Notice("New session started");
+        new Notice(t("notices.newSession"));
     }
 
     /**
@@ -699,7 +700,7 @@ export class PiChatView extends ItemView {
 
         const conn = this.plugin.connection;
         if (!conn?.isConnected()) {
-            new Notice("Not connected to Pi");
+            new Notice(t("notices.notConnected"));
             return;
         }
 
@@ -707,12 +708,12 @@ export class PiChatView extends ItemView {
             const response = await conn.send({ type: "switch_session", sessionPath: session.path });
             const data = response.data as Record<string, unknown> | undefined;
             if (data?.cancelled) {
-                new Notice("Session switch was cancelled");
+                new Notice(t("notices.switchCancelled"));
                 return;
             }
         } catch (err) {
             console.warn("[Pi Chat] switch_session RPC failed:", err);
-            new Notice("Failed to switch session");
+            new Notice(t("notices.switchFailed"));
             return;
         }
 
@@ -735,7 +736,7 @@ export class PiChatView extends ItemView {
         this.plugin.statusBar?.refreshModel();
         this.plugin.statusBar?.refreshStats();
 
-        new Notice(`Switched to: ${session.name}`);
+        new Notice(t("notices.switchedTo", { name: session.name }));
         this.refreshHeader();
     }
 
@@ -800,7 +801,7 @@ export class PiChatView extends ItemView {
             }
 
             if (messages.length === 0) {
-                new Notice("Session has no exportable messages");
+                new Notice(t("notices.noExportMessages"));
                 return;
             }
 
@@ -810,13 +811,13 @@ export class PiChatView extends ItemView {
                 this.app.vault,
             );
             if (path) {
-                new Notice(`Exported to ${path}`);
+                new Notice(t("notices.exportedTo", { path }));
             } else {
-                new Notice("Export failed — persistence may be disabled");
+                new Notice(t("notices.exportFailed"));
             }
         } catch (err) {
             console.error("[Pi Chat] Export failed:", err);
-            new Notice("Failed to export session");
+            new Notice(t("notices.exportFailedGeneral"));
         }
     }
 
@@ -1035,7 +1036,7 @@ export class PiChatView extends ItemView {
             this.scrollToBottom();
         } catch (err) {
             console.warn("[Pi Chat] get_messages failed:", err);
-            new Notice("Failed to load messages from Pi");
+            new Notice(t("notices.messagesLoadFailed"));
         }
     }
 
@@ -1046,12 +1047,12 @@ export class PiChatView extends ItemView {
      */
     private async rewindToMessage(msg: ChatMessage): Promise<void> {
         if (this.readOnly) {
-            new Notice("Cannot rewind a read-only saved session");
+            new Notice(t("notices.cannotRewind"));
             return;
         }
 
         if (this.streaming) {
-            new Notice("Wait for Pi to finish before rewinding");
+            new Notice(t("notices.waitRewind"));
             return;
         }
 
@@ -1060,19 +1061,19 @@ export class PiChatView extends ItemView {
         }
 
         if (msg.role !== "user" || msg.isSteering) {
-            new Notice("Only normal user messages can be rewound");
+            new Notice(t("notices.onlyUserRewind"));
             return;
         }
 
         if (!msg.piEntryId) {
-            new Notice("This message is not rewindable yet");
+            new Notice(t("notices.notRewindable"));
             await this.syncForkEntryIds();
             return;
         }
 
         const conn = this.plugin.connection;
         if (!conn?.isConnected()) {
-            new Notice("Not connected to Pi");
+            new Notice(t("notices.notConnected"));
             return;
         }
 
@@ -1086,7 +1087,7 @@ export class PiChatView extends ItemView {
             const before = await this.getPiState();
 
             if (!before?.sessionFile) {
-                new Notice("Cannot determine current Pi session");
+                new Notice(t("notices.noSession"));
                 return;
             }
 
@@ -1115,7 +1116,7 @@ export class PiChatView extends ItemView {
 
             if (data?.cancelled) {
                 this.resetRewindState();
-                new Notice("Rewind was cancelled by Pi");
+                new Notice(t("notices.rewindCancelled"));
                 return;
             }
 
@@ -1132,7 +1133,7 @@ export class PiChatView extends ItemView {
             }
 
             this.renderReturnBanner();
-            new Notice("Rewound. Edit the message or return to latest.");
+            new Notice(t("notices.rewindSuccess"));
         } catch (err) {
             console.error("[Pi Chat] Rewind failed:", err);
             if (!forkSucceeded) {
@@ -1157,7 +1158,7 @@ export class PiChatView extends ItemView {
         if (!this.returnCheckpoint) return;
 
         if (this.streaming) {
-            new Notice("Wait for Pi to finish before returning");
+            new Notice(t("notices.waitReturn"));
             return;
         }
 
@@ -1167,7 +1168,7 @@ export class PiChatView extends ItemView {
         const conn = this.plugin.connection;
 
         if (!conn?.isConnected()) {
-            new Notice("Not connected to Pi");
+            new Notice(t("notices.notConnected"));
             return;
         }
 
@@ -1183,7 +1184,7 @@ export class PiChatView extends ItemView {
             const data = response.data as { cancelled?: boolean } | undefined;
 
             if (data?.cancelled) {
-                new Notice("Return was cancelled by Pi");
+                new Notice(t("notices.returnCancelled"));
                 return;
             }
 
@@ -1198,7 +1199,7 @@ export class PiChatView extends ItemView {
             }
 
             this.renderReturnBanner();
-            new Notice("Returned to latest");
+            new Notice(t("notices.returnSuccess"));
         } catch (err) {
             console.error("[Pi Chat] Return to latest failed:", err);
 
@@ -1335,15 +1336,15 @@ export class PiChatView extends ItemView {
 
         const label = this.returnBannerEl.createSpan({
             cls: "pi-return-banner-text",
-            text: "You are viewing a rewind fork.",
+            text: t("view.returnBanner.text"),
         });
 
         const btn = this.returnBannerEl.createEl("button", {
             cls: "pi-return-latest-btn",
-            text: "Return to latest",
+            text: t("view.returnBanner.button"),
             attr: {
                 type: "button",
-                title: "Return to the session state before rewind",
+                title: t("view.returnBanner.tooltip"),
             },
         });
 
@@ -1359,7 +1360,7 @@ export class PiChatView extends ItemView {
      */
     sendMessage(text: string, attachments: Attachment[] = []): void {
         if (this.readOnly) {
-            new Notice("This is a saved session (read-only). Start a new session to chat.");
+            new Notice(t("notices.readOnly"));
             return;
         }
 
@@ -1374,11 +1375,11 @@ export class PiChatView extends ItemView {
         const fileAttachments = attachments.filter((a) => a.type === "file");
         if (fileAttachments.length > 0) {
             const names = fileAttachments.map((a) => a.name).join(", ");
-            displayText += `\n\n📎 Attached: ${names}`;
+            displayText += `\n\n📎 ${t("attachment.attached", { names })}`;
         }
         const imageAttachments = attachments.filter((a) => a.type === "image");
         if (imageAttachments.length > 0) {
-            displayText += `\n\n🖼 ${imageAttachments.length} image(s) attached`;
+            displayText += `\n\n🖼 ${t("attachment.imagesAttached", { count: imageAttachments.length })}`;
         }
 
         const userMsg: ChatMessage = {
@@ -1427,7 +1428,7 @@ export class PiChatView extends ItemView {
                 })
                 .catch((err) => {
                     console.error("[Pi Chat] Failed to send message:", err);
-                    new Notice("Failed to send message to Pi");
+                    new Notice(t("notices.sendFailed"));
                     this.removeThinkingIndicator();
                     if (!isSteering) {
                         this.setStreamingState(false);
@@ -1440,7 +1441,7 @@ export class PiChatView extends ItemView {
             }
         } catch (err) {
             console.error("[Pi Chat] Failed to send message:", err);
-            new Notice("Failed to send message to Pi");
+            new Notice(t("notices.sendFailed"));
             this.removeThinkingIndicator();
             if (!isSteering) {
                 this.setStreamingState(false);
@@ -1583,7 +1584,7 @@ export class PiChatView extends ItemView {
                 });
                 // Insert before the input container
                 this.contentEl.insertBefore(this.readOnlyBanner, this.inputContainer);
-                this.readOnlyBanner.setText("📖 Viewing saved session");
+                this.readOnlyBanner.setText(t("view.readOnlyBanner"));
             }
         } else {
             if (this.readOnlyBanner) {
@@ -1609,7 +1610,7 @@ export class PiChatView extends ItemView {
 
         const content = this.thinkingIndicatorEl.createDiv({ cls: "pi-thinking-indicator-content" });
         content.createSpan({ cls: "pi-thinking-dots" });
-        content.createSpan({ text: "Thinking…", cls: "pi-thinking-text" });
+        content.createSpan({ text: t("view.thinking"), cls: "pi-thinking-text" });
 
         this.scrollToBottom();
     }
@@ -1652,7 +1653,7 @@ export class PiChatView extends ItemView {
             conn.send({ type: "abort" });
         } catch (err) {
             console.warn("[Pi Chat] Failed to send abort:", err);
-            new Notice("Connection lost — resetting view");
+            new Notice(t("notices.abortConnectionLost"));
         } finally {
             // Always reset streaming state so user can recover
             this.setStreamingState(false);
@@ -1738,7 +1739,7 @@ export class PiChatView extends ItemView {
             if (!thinkingEl) {
                 thinkingEl = createEl("details", { cls: "pi-thinking pi-thinking-live" });
                 thinkingEl.open = true;
-                thinkingEl.createEl("summary", { text: "Thinking…" });
+                thinkingEl.createEl("summary", { text: t("view.thinking") });
                 thinkingEl.createDiv({ cls: "pi-thinking-content" });
                 this.streamingMessageEl.insertBefore(thinkingEl, contentEl);
             }
@@ -1851,7 +1852,7 @@ export class PiChatView extends ItemView {
                     this.streamingComponent.load();
                 }
                 const thinkingEl = createEl("details", { cls: "pi-thinking" });
-                thinkingEl.createEl("summary", { text: "Thinking…" });
+                thinkingEl.createEl("summary", { text: t("renderer.thinkingSummary") });
                 const thinkingContentEl = thinkingEl.createDiv({ cls: "pi-thinking-content" });
                 try {
                     MarkdownRenderer.render(
@@ -1897,8 +1898,8 @@ export class PiChatView extends ItemView {
                                 : undefined,
                             rewindDisabled: this.streaming || this.rewindBusy,
                             rewindTitle: msg.piEntryId
-                                ? "Rewind to before this message"
-                                : "Waiting for Pi entry id",
+                                ? t("renderer.rewindTooltip")
+                                : t("notices.notRewindable"),
                         },
                     );
                     break;
@@ -1926,8 +1927,9 @@ export class PiChatView extends ItemView {
         } catch (err) {
             console.error("[Pi Chat] Message render error:", err);
             const errorEl = this.messagesContainer.createDiv({ cls: "pi-message pi-render-error" });
-            errorEl.createEl("p", { text: "⚠️ Failed to render message" });
+            errorEl.createEl("p", { text: t("notices.renderError") });
             errorEl.createEl("pre", { text: msg.content });
         }
     }
 }
+

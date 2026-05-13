@@ -1,4 +1,5 @@
 import type PiPlugin from "./main";
+import { t } from "./i18n/index";
 
 /**
  * Manages the status bar item showing Pi connection state,
@@ -122,11 +123,11 @@ export class PiStatusBar {
             }
             parts.push(modelText);
         } else if (!this.sessionName) {
-            parts.push("Pi");
+            parts.push(t("statusBar.default"));
         }
 
         if (this.streaming) {
-            parts.push("⏳");
+            parts.push(t("statusBar.streaming"));
         }
 
         if (this.tokens > 0) {
