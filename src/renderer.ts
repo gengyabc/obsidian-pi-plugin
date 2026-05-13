@@ -1,7 +1,7 @@
 import { App, Component, MarkdownRenderer } from "obsidian";
 import { t } from "./i18n/index";
 
-/** Actions available on a user message (e.g., rewind) */
+/** Actions available on a user message. */
 export interface UserMessageActions {
     onRewind?: () => void;
     rewindDisabled?: boolean;
@@ -81,29 +81,15 @@ export class MessageRenderer {
             cls: "pi-message-label-text",
         });
 
-        // Add rewind action button if provided
         if (actions?.onRewind) {
             const actionBar = label.createSpan({ cls: "pi-message-actions" });
-            const btn = actionBar.createEl("button", {
+            this.addActionButton(actionBar, {
                 cls: "pi-message-rewind-btn",
-                attr: {
-                    "aria-label": t("renderer.rewindTooltip"),
-                    title: actions.rewindTitle ?? t("renderer.rewindTooltip"),
-                    type: "button",
-                },
+                text: t("view.rewind"),
+                title: actions.rewindTitle ?? t("renderer.rewindTooltip"),
+                disabled: actions.rewindDisabled,
+                onClick: actions.onRewind,
             });
-            btn.setText(t("view.rewind"));
-
-            if (actions.rewindDisabled) {
-                btn.setAttribute("disabled", "true");
-                btn.addClass("is-disabled");
-            } else {
-                btn.addEventListener("click", (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    actions.onRewind?.();
-                });
-            }
         }
 
         const contentEl = wrapper.createDiv({ cls: "pi-message-content" });
@@ -175,6 +161,40 @@ export class MessageRenderer {
         }
 
         return wrapper;
+    }
+
+    private addActionButton(
+        actionBar: HTMLElement,
+        options: {
+            cls: string;
+            text: string;
+            title: string;
+            disabled?: boolean;
+            onClick?: () => void;
+        },
+    ): HTMLButtonElement {
+        const btn = actionBar.createEl("button", {
+            cls: options.cls,
+            attr: {
+                "aria-label": options.title,
+                title: options.title,
+                type: "button",
+            },
+        });
+        btn.setText(options.text);
+
+        if (options.disabled) {
+            btn.setAttribute("disabled", "true");
+            btn.addClass("is-disabled");
+        } else if (options.onClick) {
+            btn.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                options.onClick?.();
+            });
+        }
+
+        return btn;
     }
 
     /**

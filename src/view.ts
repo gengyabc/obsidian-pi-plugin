@@ -1931,5 +1931,6 @@ export class PiChatView extends ItemView {
             errorEl.createEl("pre", { text: msg.content });
         }
     }
+
 }
 

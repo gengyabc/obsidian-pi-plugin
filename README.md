@@ -10,6 +10,7 @@ Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/p
 - Full streaming with live markdown rendering
 - Thinking blocks (expandable, auto-collapses when response starts)
 - Tool call results in collapsible details
+- Native text selection for chat history
 - Steering messages — send while the agent is working to redirect it
 - Abort button to cancel mid-stream
 - Image paste support (base64)
