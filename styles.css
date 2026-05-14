@@ -939,3 +939,14 @@
     width: 100%;
 }
 
+/* ── API Key Required for Selected Provider (highlighted) ── */
+.setting-item.pi-api-key-setting .pi-api-key-input.pi-api-key-required {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.setting-item.pi-api-key-setting .pi-api-key-input.pi-api-key-required:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+

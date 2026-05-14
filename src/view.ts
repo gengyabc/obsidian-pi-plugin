@@ -286,8 +286,8 @@ export class PiChatView extends ItemView {
     /**
      * Wire this view to a PiConnection's event stream.
      */
-    connectToRpc(): void {
-        const conn = this.plugin.ensureConnection();
+    async connectToRpc(): Promise<void> {
+        const conn = await this.plugin.ensureConnection();
         if (this.rpcEventHandler) {
             conn.offEvent(this.rpcEventHandler);
         }
@@ -479,7 +479,7 @@ export class PiChatView extends ItemView {
             }
             if (newName && newName !== currentName) {
                 try {
-                    const conn = this.plugin.ensureConnection();
+                    const conn = await this.plugin.ensureConnection();
                     await conn.send({ type: "set_session_name", name: newName });
                 } catch (err) {
                     console.warn("[Pi Chat] Failed to rename session:", err);
@@ -1363,7 +1363,7 @@ export class PiChatView extends ItemView {
     /**
      * Send a user message to Pi, with optional attachments and images.
      */
-    sendMessage(text: string, attachments: Attachment[] = []): void {
+    async sendMessage(text: string, attachments: Attachment[] = []): Promise<void> {
         if (this.readOnly) {
             new Notice(t("notices.readOnly"));
             return;
@@ -1408,7 +1408,7 @@ export class PiChatView extends ItemView {
             message += `\n\n<file path="${att.name}">\n${att.content}\n</file>`;
         }
 
-        const conn = this.plugin.ensureConnection();
+        const conn = await this.plugin.ensureConnection();
 
         // During streaming: steer the agent. Otherwise: new prompt.
         const command: Record<string, unknown> = {
@@ -1654,8 +1654,11 @@ export class PiChatView extends ItemView {
      */
     private abortStream(): void {
         try {
-            const conn = this.plugin.ensureConnection();
-            conn.send({ type: "abort" });
+            // Fire-and-forget abort - connection should already exist
+            const conn = this.plugin.connection;
+            if (conn) {
+                conn.send({ type: "abort" });
+            }
         } catch (err) {
             console.warn("[Pi Chat] Failed to send abort:", err);
             new Notice(t("notices.abortConnectionLost"));
@@ -1671,8 +1674,10 @@ export class PiChatView extends ItemView {
     private triggerCommandSuggest(): void {
         // Wire up the connection for fetching commands
         try {
-            const conn = this.plugin.ensureConnection();
-            this.commandSuggest.setConnection(conn);
+            const conn = this.plugin.connection;
+            if (conn) {
+                this.commandSuggest.setConnection(conn);
+            }
         } catch {
             // Connection may not be available yet — command suggest will return empty
         }

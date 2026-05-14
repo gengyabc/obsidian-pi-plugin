@@ -34,6 +34,10 @@
   "settings.apiKeys.heading": "API keys",
   "settings.apiKeys.noConfig": "Could not load Pi configuration from ~/.pi/agent/models.json. Run 'pi' first to create it.",
   "settings.apiKeys.info": "API keys are stored securely in your system keychain via Obsidian's SecretStorage. Enter keys below - they will be passed to Pi as environment variables.",
+  "settings.apiKeys.selectedProviderInfo": "You selected '{{provider}}' which requires {{envVar}}. Status: {{status}}",
+  "settings.apiKeys.keySet": "key set ✓",
+  "settings.apiKeys.keyMissing": "key missing — enter below",
+  "settings.apiKeys.keyRequired": "Required for selected provider",
   "settings.apiKeys.usedBy": "Used by: {{providers}}{{stored}}",
   "settings.apiKeys.keyStored": " (key stored ✓",
   "settings.apiKeys.enterNew": "Key stored - enter new key to update",
@@ -175,7 +179,7 @@
   "notices.renderError": "⚠️ Failed to render message",
   "notices.fileTooLarge": "File too large ({{size}}MB). Max 1MB.",
   "notices.fileReadFailed": "Failed to read file",
-  "notices.missingApiKeys": "Missing API keys: {{keys}}. Set them in Pi plugin settings.",
+  "notices.missingApiKeys": "Missing API key: {{keys}}. Set it in Pi plugin settings.",
   "attachment.attached": "Attached: {{names}}",
   "attachment.imagesAttached": "{{count}} image(s) attached"
 }

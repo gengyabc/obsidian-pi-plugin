@@ -127,6 +127,7 @@ export class PiConnection {
     private connected = false;
     private requestId = 0;
     private pendingRequests: Map<string, PendingRequest> = new Map();
+    private intentionallyDestroyed = false; // Flag to suppress error on intentional destroy
 
     constructor(
         piBinaryPath: string,
@@ -160,6 +161,9 @@ export class PiConnection {
         if (this.process) {
             this.destroy();
         }
+
+        // Reset intentional destroy flag for new connection
+        this.intentionallyDestroyed = false;
 
         if (!this.piBinaryPath || this.piBinaryPath.trim() === "") {
             throw new Error("Pi binary path is not configured. Please set the path in plugin settings.");
@@ -237,6 +241,13 @@ export class PiConnection {
 
         // Handle process exit
         this.process.on("exit", (code: number | null, signal: string | null) => {
+            // Suppress error if intentionally destroyed (e.g., reconnecting after API key change)
+            if (this.intentionallyDestroyed) {
+                console.log("[Pi RPC] Process exited (intentional destroy), code", code, "signal", signal);
+                this.connected = false;
+                this.cleanup();
+                return;
+            }
             if (code !== 0) {
                 console.warn("[Pi RPC] Process exited with code", code, "signal", signal);
             }
@@ -342,7 +353,9 @@ export class PiConnection {
      * Kill the child process and clean up.
      */
     destroy(): void {
+        this.intentionallyDestroyed = true; // Suppress error on exit
         this.disconnectHandler = null; // Don't fire on explicit destroy
+        this.handlers = []; // Clear event handlers
         if (this.process) {
             this.process.kill();
         }
@@ -357,6 +370,11 @@ export class PiConnection {
     }
 
     private dispatch(event: RpcEvent): void {
+        // Suppress error events if intentionally destroyed
+        if (event.type === "error" && this.intentionallyDestroyed) {
+            return;
+        }
+
         // Route responses to pending request Promises
         if (event.type === "response" && typeof event.id === "string") {
             const pending = this.pendingRequests.get(event.id);

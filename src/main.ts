@@ -12,7 +12,7 @@ import type { PiCommand } from "./commands";
 import { MessageStore } from "./message-store";
 import type { MessageStoreData } from "./message-store";
 import { t } from "./i18n/index";
-import { loadPiModelsConfig, getRequiredEnvVars } from "./pi-config";
+import { loadPiModelsConfig, getRequiredEnvVars, getDefaultProviderAndModel } from "./pi-config";
 
 interface ModelOption {
     id: string;
@@ -62,6 +62,9 @@ export default class PiPlugin extends Plugin {
     async onload(): Promise<void> {
         await this.loadSettings();
         await this.loadMessageStore();
+
+        // Auto-select default provider/model if not set
+        await this.autoSelectDefaults();
 
         this.addSettingTab(new PiSettingTab(this.app, this));
 
@@ -119,7 +122,7 @@ export default class PiPlugin extends Plugin {
         const statusBarEl = this.addStatusBarItem();
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
-        // Check for missing API keys and show notice
+        // Check for missing API keys (async - don't block onload)
         this.checkMissingApiKeys();
     }
 
@@ -145,7 +148,6 @@ export default class PiPlugin extends Plugin {
             this.connection.destroy();
             this.connection = null;
         }
-        // Plugin unloaded
     }
 
     /**
@@ -360,8 +362,9 @@ export default class PiPlugin extends Plugin {
 
     /**
      * Get or create a PiConnection using current settings.
+     * Async because API keys must be loaded from SecretStorage.
      */
-    ensureConnection(): PiConnection {
+    async ensureConnection(): Promise<PiConnection> {
         if (this.connection && this.connection.isConnected()) {
             return this.connection;
         }
@@ -372,6 +375,38 @@ export default class PiPlugin extends Plugin {
             this.connection = null;
         }
 
+        // Load API keys from SecretStorage (async)
+        const apiKeys = await this.loadApiKeys();
+
+        // Create connection with loaded keys
+        await this.createConnection(apiKeys);
+        return this.connection!;
+    }
+
+    /**
+     * Load all required API keys from SecretStorage.
+     */
+    private async loadApiKeys(): Promise<Record<string, string>> {
+        const apiKeys: Record<string, string> = {};
+        const piConfig = loadPiModelsConfig();
+        if (piConfig) {
+            const requiredEnvVars = getRequiredEnvVars(piConfig);
+            for (const envVar of requiredEnvVars) {
+                const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
+                const key = await this.app.secretStorage.getSecret(secretName);
+                if (key) {
+                    apiKeys[envVar] = key;
+                }
+            }
+        }
+        return apiKeys;
+    }
+
+    /**
+     * Create a PiConnection and set up event handlers.
+     * Shared between ensureConnection() and reconnectAfterKeyChange().
+     */
+    private async createConnection(apiKeys: Record<string, string>): Promise<void> {
         // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
         if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
@@ -391,29 +426,15 @@ export default class PiPlugin extends Plugin {
             args.push("--model", this.settings.defaultModel);
         }
 
-        // Retrieve API keys from SecretStorage
-        const apiKeys: Record<string, string> = {};  // envVarName -> key
-        const piConfig = loadPiModelsConfig();
-        if (piConfig) {
-            const requiredEnvVars = getRequiredEnvVars(piConfig);
-            for (const envVar of requiredEnvVars) {
-                const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-                const key = this.app.secretStorage.getSecret(secretName);
-                if (key) {
-                    apiKeys[envVar] = key;
-                }
-            }
-        }
-
         try {
-            // Create connection - API keys from SecretStorage passed as env vars
+            // Create connection - API keys passed as env vars
             this.connection = new PiConnection(
                 this.settings.piBinaryPath,
                 cwd,
                 args,
                 this.settings.nodePath,
                 this.settings.envVars,
-                apiKeys,  // envVarName -> key from SecretStorage
+                apiKeys,
                 this.settings.rpcTimeout
             );
 
@@ -453,8 +474,6 @@ export default class PiPlugin extends Plugin {
             showCriticalNotice(t("notices.startFailed", { msg }));
             this.connection = null;
         }
-
-        return this.connection!;
     }
 
     /**
@@ -462,7 +481,7 @@ export default class PiPlugin extends Plugin {
      */
     private async switchModel(): Promise<void> {
         try {
-            const conn = this.ensureConnection();
+            const conn = await this.ensureConnection();
             const response = await conn.send({ type: "get_available_models" });
             const data = response.data as Record<string, unknown> | undefined;
             const models = (data?.models as Array<Record<string, unknown>>) ?? [];
@@ -505,7 +524,7 @@ export default class PiPlugin extends Plugin {
      */
     private async sendTestPrompt(): Promise<void> {
         try {
-            const conn = this.ensureConnection();
+            const conn = await this.ensureConnection();
 
             new Notice(t("notices.sending"));
 
@@ -524,44 +543,77 @@ export default class PiPlugin extends Plugin {
      * Reconnect to Pi after API key change.
      * Destroys existing connection and creates a new one with updated keys.
      */
-    reconnectAfterKeyChange(): void {
+    async reconnectAfterKeyChange(): Promise<void> {
         const hadConnection = this.connection !== null;
         if (this.connection) {
             this.connection.destroy();
             this.connection = null;
         }
-        // Create new connection with updated keys from SecretStorage
-        try {
-            this.ensureConnection();
-            // Only show notice if we actually restarted a connection
-            if (hadConnection) {
-                new Notice(t("notices.reconnected"));
-            }
-        } catch (err) {
-            // ensureConnection already shows error notice
+
+        // Load API keys from SecretStorage (async)
+        const apiKeys = await this.loadApiKeys();
+
+        // Create new connection with loaded keys
+        await this.createConnection(apiKeys);
+
+        // Only show notice if we actually restarted a connection
+        if (hadConnection) {
+            new Notice(t("notices.reconnected"));
         }
     }
 
     /**
-     * Check for missing API keys based on Pi's models.json and show a notice.
+     * Auto-select default provider and model from Pi's config if not already set.
+     * If provider is set but model isn't, use first model from that provider.
      */
-    private checkMissingApiKeys(): void {
+    async autoSelectDefaults(): Promise<void> {
+        // If user already set provider/model, don't override
+        if (this.settings.defaultProvider && this.settings.defaultModel) return;
+
+        const piConfig = loadPiModelsConfig();
+        if (!piConfig) return;  // No config available
+
+        // If provider is set but model isn't, use first model from that provider
+        if (this.settings.defaultProvider && !this.settings.defaultModel) {
+            const providerConfig = piConfig.providers[this.settings.defaultProvider];
+            if (providerConfig?.models?.length > 0) {
+                this.settings.defaultModel = providerConfig.models[0].id;
+                await this.saveSettings();
+            }
+            return;
+        }
+
+        // Neither provider nor model set - use first provider and its first model
+        const defaults = getDefaultProviderAndModel(piConfig);
+        if (!defaults) return;  // No providers available
+
+        this.settings.defaultProvider = defaults.provider;
+        this.settings.defaultModel = defaults.model;
+
+        // Save the auto-selected defaults
+        await this.saveSettings();
+    }
+
+    /**
+     * Check for missing API keys based on the selected provider.
+     * Shows error if the provider's API key is not set in SecretStorage.
+     */
+    async checkMissingApiKeys(): Promise<void> {
         const piConfig = loadPiModelsConfig();
         if (!piConfig) return;  // No config file, nothing to check
 
-        const requiredEnvVars = getRequiredEnvVars(piConfig);
-        const missing: string[] = [];
+        // Get the provider config
+        const providerName = this.settings.defaultProvider;
+        if (!providerName) return;  // No provider set
 
-        for (const envVar of requiredEnvVars) {
-            const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-            const key = this.app.secretStorage.getSecret(secretName);
-            if (!key) {
-                missing.push(envVar);
-            }
-        }
+        const providerConfig = piConfig.providers[providerName];
+        if (!providerConfig?.apiKey) return;  // Provider doesn't need API key
 
-        if (missing.length > 0) {
-            showCriticalNotice(t("notices.missingApiKeys", { keys: missing.join(", ") }));
+        const envVar = providerConfig.apiKey;
+        const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
+        const key = await this.app.secretStorage.getSecret(secretName);
+        if (!key) {
+            showCriticalNotice(t("notices.missingApiKeys", { keys: envVar }));
         }
     }
 }

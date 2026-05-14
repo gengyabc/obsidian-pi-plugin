@@ -157,39 +157,91 @@ export class PiSettingTab extends PluginSettingTab {
     }
 
     private createProviderModelSettings(containerEl: HTMLElement): void {
+        const piConfig = loadPiModelsConfig();
+
+        if (!piConfig) {
+            const noConfigDiv = containerEl.createDiv({ cls: "setting-item-description" });
+            noConfigDiv.setText(t("settings.apiKeys.noConfig"));
+            return;
+        }
+
+        const providerNames = Object.keys(piConfig.providers);
+        const selectedProvider = this.plugin.settings.defaultProvider;
+        const selectedModel = this.plugin.settings.defaultModel;
+
+        // Get models for selected provider
+        const getModelsForProvider = (providerName: string): string[] => {
+            const providerConfig = piConfig.providers[providerName];
+            if (!providerConfig?.models) return [];
+            return providerConfig.models.map((m) => m.id);
+        };
+
+        const modelsForSelectedProvider = selectedProvider ? getModelsForProvider(selectedProvider) : [];
+
+        // Provider dropdown
         new Setting(containerEl)
             .setName(t("settings.defaultProvider.name"))
             .setDesc(t("settings.defaultProvider.desc"))
-            .addText((text) =>
-                text
-                    .setPlaceholder(t("settings.defaultProvider.placeholder"))
-                    .setValue(this.plugin.settings.defaultProvider)
-                    .onChange(async (value) => {
-                        this.plugin.settings.defaultProvider = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
+            .addDropdown((dropdown) => {
+                // Add empty option at top
+                dropdown.addOption("", t("settings.defaultProvider.placeholder"));
+                // Add all providers
+                for (const providerName of providerNames) {
+                    dropdown.addOption(providerName, providerName);
+                }
+                dropdown.setValue(selectedProvider);
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.defaultProvider = value;
+                    // Auto-select first model for new provider
+                    if (value) {
+                        const models = getModelsForProvider(value);
+                        if (models.length > 0) {
+                            this.plugin.settings.defaultModel = models[0];
+                        } else {
+                            this.plugin.settings.defaultModel = "";
+                        }
+                    } else {
+                        this.plugin.settings.defaultModel = "";
+                    }
+                    await this.plugin.saveSettings();
+                    // Re-check API keys and refresh UI
+                    await this.plugin.checkMissingApiKeys();
+                    this.display(); // Refresh to update model dropdown and API key status
+                });
+            });
 
+        // Model dropdown - populated based on selected provider
         new Setting(containerEl)
             .setName(t("settings.defaultModel.name"))
             .setDesc(t("settings.defaultModel.desc"))
-            .addText((text) =>
-                text
-                    .setPlaceholder(t("settings.defaultModel.placeholder"))
-                    .setValue(this.plugin.settings.defaultModel)
-                    .onChange(async (value) => {
-                        this.plugin.settings.defaultModel = value;
-                        await this.plugin.saveSettings();
-                    })
-            );
+            .addDropdown((dropdown) => {
+                // Add empty option at top
+                dropdown.addOption("", t("settings.defaultModel.placeholder"));
+                // Add models for selected provider
+                if (selectedProvider && modelsForSelectedProvider.length > 0) {
+                    for (const modelId of modelsForSelectedProvider) {
+                        // Find model name for better display
+                        const providerConfig = piConfig.providers[selectedProvider];
+                        const modelInfo = providerConfig?.models?.find((m) => m.id === modelId);
+                        const displayName = modelInfo?.name || modelId;
+                        dropdown.addOption(modelId, displayName);
+                    }
+                }
+                dropdown.setValue(selectedModel);
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.defaultModel = value;
+                    await this.plugin.saveSettings();
+                });
+            });
     }
 
     /**
      * Create API key input fields using Obsidian's SecretStorage.
      * Reads required env vars from Pi's models.json and shows password input for each.
      * Keys are stored securely in system keychain via SecretStorage.
+     * Highlights the key required for the currently selected provider.
      */
-    private createApiKeySettings(containerEl: HTMLElement): void {
+    private async createApiKeySettings(containerEl: HTMLElement): Promise<void> {
         new Setting(containerEl).setHeading().setName(t("settings.apiKeys.heading"));
 
         const piConfig = loadPiModelsConfig();
@@ -203,9 +255,25 @@ export class PiSettingTab extends PluginSettingTab {
         const providers = getProviderInfo(piConfig);
         const requiredEnvVars = getRequiredEnvVars(piConfig);
 
-        // Info explaining keys are stored securely
+        // Determine which env var is required for selected provider
+        const selectedProvider = this.plugin.settings.defaultProvider;
+        const selectedProviderConfig = selectedProvider ? piConfig.providers[selectedProvider] : null;
+        const requiredEnvVarForSelected = selectedProviderConfig?.apiKey;
+
+        // Info explaining keys are stored securely, plus which key is needed for selected provider
         const infoDiv = containerEl.createDiv({ cls: "setting-item-description" });
-        infoDiv.setText(t("settings.apiKeys.info"));
+        if (requiredEnvVarForSelected) {
+            const secretName = `pi-plugin-${requiredEnvVarForSelected.toLowerCase().replace(/_/g, "-")}`;
+            const key = await this.app.secretStorage.getSecret(secretName);
+            const hasKey = !!key;
+            infoDiv.setText(t("settings.apiKeys.selectedProviderInfo", {
+                provider: selectedProvider,
+                envVar: requiredEnvVarForSelected,
+                status: hasKey ? t("settings.apiKeys.keySet") : t("settings.apiKeys.keyMissing")
+            }));
+        } else {
+            infoDiv.setText(t("settings.apiKeys.info"));
+        }
 
         // Create password input for each required env var
         for (const envVar of requiredEnvVars) {
@@ -214,11 +282,12 @@ export class PiSettingTab extends PluginSettingTab {
                 .map((p) => p.name);
 
             const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-            const existingKey = this.app.secretStorage.getSecret(secretName);
+            const existingKey = await this.app.secretStorage.getSecret(secretName);
             const hasKey = !!existingKey;
+            const isRequiredForSelected = envVar === requiredEnvVarForSelected;
 
             new Setting(containerEl)
-                .setName(envVar)
+                .setName(isRequiredForSelected ? `${envVar} ✓` : envVar)
                 .setDesc(t("settings.apiKeys.usedBy", { providers: providerNames.join(", "), stored: hasKey ? t("settings.apiKeys.keyStored") : "" }))
                 .addText((text) => {
                     text
@@ -226,6 +295,11 @@ export class PiSettingTab extends PluginSettingTab {
                         .setValue("") // Always show empty for security
                         .inputEl.type = "password";
                     text.inputEl.addClass("pi-api-key-input");
+                    
+                    // Highlight the input for selected provider's key
+                    if (isRequiredForSelected) {
+                        text.inputEl.addClass("pi-api-key-required");
+                    }
                     
                     text.inputEl.addEventListener("change", async () => {
                         const value = text.inputEl.value;
@@ -235,12 +309,14 @@ export class PiSettingTab extends PluginSettingTab {
                             text.inputEl.value = "";
                             text.setPlaceholder(t("settings.apiKeys.keyStored"));
                             new Notice(t("notices.keyStored", { envVar }));
-                            // Reconnect to pick up the new key
+                            // Reconnect to pick up the new key (async, no await needed)
                             this.plugin.reconnectAfterKeyChange();
-                            this.display(); // Refresh to update status
+                            // Refresh to update status
+                            this.display();
                         }
                     });
-                });
+                })
+                .settingEl.addClass("pi-api-key-setting");
         }
 
         // Refresh button to reload providers

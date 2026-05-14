@@ -120,3 +120,32 @@ export function checkEnvVarStatus(config: PiModelsConfig | null): {
 
     return { detected, missing };
 }
+
+/**
+ * Get the first available provider and its first model as defaults.
+ * Returns null if no providers available.
+ */
+export function getDefaultProviderAndModel(config: PiModelsConfig | null): {
+    provider: string;
+    model: string;
+    apiKeyEnvVar: string;
+} | null {
+    if (!config || !config.providers) return null;
+
+    const providerNames = Object.keys(config.providers);
+    if (providerNames.length === 0) return null;
+
+    // Pick first provider
+    const provider = providerNames[0];
+    const providerConfig = config.providers[provider];
+
+    // Pick first model from that provider
+    if (!providerConfig.models || providerConfig.models.length === 0) return null;
+    const model = providerConfig.models[0].id;
+
+    return {
+        provider,
+        model,
+        apiKeyEnvVar: providerConfig.apiKey,
+    };
+}
