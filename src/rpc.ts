@@ -116,7 +116,7 @@ export class PiConnection {
     private piBinaryPath: string;
     private nodePath: string;
     private envVars: string[];
-    private apiKeys: Record<string, string>;  // provider -> key
+    private apiKeys: Record<string, string>;  // envVarName -> key
     private cwd: string;
     private extraArgs: string[];
     private timeout: number;
@@ -192,10 +192,9 @@ export class PiConnection {
             }
         }
 
-        // Pass API keys directly from settings (provider -> env var name mapping)
-        for (const [provider, key] of Object.entries(this.apiKeys)) {
+        // Pass API keys as env vars (envVarName -> key mapping from SecretStorage)
+        for (const [envVarName, key] of Object.entries(this.apiKeys)) {
             if (key && key.trim()) {
-                const envVarName = this.getEnvVarName(provider);
                 env[envVarName] = key;
             }
         }
@@ -259,19 +258,6 @@ export class PiConnection {
         });
     }
 
-    /**
-     * Get the standard env var name for a provider.
-     */
-    private getEnvVarName(provider: string): string {
-        const mappings: Record<string, string> = {
-            bailian: "BAILIAN_API_KEY",
-            anthropic: "ANTHROPIC_API_KEY",
-            openai: "OPENAI_API_KEY",
-            gemini: "GOOGLE_API_KEY",
-            deepseek: "DEEPSEEK_API_KEY",
-        };
-        return mappings[provider] || `${provider.toUpperCase()}_API_KEY`;
-    }
 
     /**
      * Send a command to Pi via stdin as a JSON line.

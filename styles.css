@@ -895,3 +895,47 @@
     border-color: var(--interactive-accent);
     outline: none;
 }
+
+/* ── API Key Info Section (Settings) ── */
+.pi-api-key-info {
+    padding: 12px;
+    margin-bottom: 16px;
+    background: var(--background-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.pi-api-key-info p {
+    margin: 4px 0;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.pi-api-key-info code {
+    background: var(--background-primary-alt);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.pi-api-keys-missing {
+    color: var(--text-error);
+}
+
+.pi-api-keys-detected {
+    color: var(--text-success);
+}
+
+.pi-env-status-ok {
+    color: var(--text-success);
+}
+
+.pi-env-status-missing {
+    color: var(--text-error);
+}
+
+/* ── API Key Input Width (Settings) ── */
+.pi-api-key-input {
+    width: 100%;
+}
+

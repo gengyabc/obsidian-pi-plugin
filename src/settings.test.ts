@@ -16,8 +16,6 @@ describe("DEFAULT_SETTINGS", () => {
         expect(DEFAULT_SETTINGS.piBinaryPath).toBe("pi");
         expect(DEFAULT_SETTINGS.nodePath).toBe("");
         expect(DEFAULT_SETTINGS.envVars).toBe("");
-        expect(DEFAULT_SETTINGS.apiSecretNames).toEqual({});
-        expect(DEFAULT_SETTINGS.apiKeys).toEqual({});
         expect(DEFAULT_SETTINGS.workingDirectory).toBe("");
         expect(DEFAULT_SETTINGS.defaultProvider).toBe("");
         expect(DEFAULT_SETTINGS.defaultModel).toBe("");

@@ -1,13 +1,13 @@
-import { App, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { Platform } from "obsidian";
 import type PiPlugin from "./main";
 import { t } from "./i18n/index";
+import { loadPiModelsConfig, getProviderInfo, getRequiredEnvVars } from "./pi-config";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
     nodePath: string;
     envVars: string;
-    apiSecretNames: Record<string, string>;
-    apiKeys: Record<string, string>;
     workingDirectory: string;
     defaultProvider: string;
     defaultModel: string;
@@ -21,8 +21,6 @@ export const DEFAULT_SETTINGS: PiPluginSettings = {
     piBinaryPath: "pi",
     nodePath: "",
     envVars: "",
-    apiSecretNames: {},
-    apiKeys: {},
     workingDirectory: "",
     defaultProvider: "",
     defaultModel: "",
@@ -54,7 +52,7 @@ export class PiSettingTab extends PluginSettingTab {
             .setDesc(t("settings.rpcTimeout.desc"))
             .addSlider((slider) =>
                 slider
-                    .setLimits(10, 120, 5)
+                    .setLimits(10, 300, 10)
                     .setValue(this.plugin.settings.rpcTimeout / 1000)
                     .setDynamicTooltip()
                     .onChange(async (value) => {
@@ -75,8 +73,6 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-
-        this.createProviderModelSettings(containerEl);
 
         new Setting(containerEl)
             .setName(t("settings.sessionDir.name"))
@@ -118,6 +114,16 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        this.createProviderModelSettings(containerEl);
+
+        // API keys section - uses SecretStorage
+        this.createApiKeySettings(containerEl);
+
+        // Platform-specific help sections
+        if (Platform.isDesktop) {
+            this.createPlatformHelpSections(containerEl);
+        }
     }
 
     private createPiBinaryPathSetting(containerEl: HTMLElement): void {
@@ -133,31 +139,6 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-
-        const helpDiv = containerEl.createDiv({ cls: "setting-item-description pi-platform-help" });
-
-        if (Platform.isMacOS) {
-            helpDiv.createEl("strong", { text: t("settings.help.macosPi.title") });
-            const macList = helpDiv.createEl("ul");
-            macList.createEl("li", { text: t("settings.help.macosPi.step1") });
-            macList.createEl("li", { text: t("settings.help.macosPi.step2") });
-            macList.createEl("li", { text: t("settings.help.macosPi.step3") });
-            macList.createEl("li", { text: t("settings.help.macosPi.step4") });
-        } else if (Platform.isWin) {
-            helpDiv.createEl("strong", { text: t("settings.help.windowsPi.title") });
-            const winList = helpDiv.createEl("ul");
-            winList.createEl("li", { text: t("settings.help.windowsPi.step1") });
-            const subList = winList.createEl("ul");
-            subList.createEl("li", { text: t("settings.help.windowsPi.powershell") });
-            subList.createEl("li", { text: t("settings.help.windowsPi.cmd") });
-            winList.createEl("li", { text: t("settings.help.windowsPi.step3") });
-            winList.createEl("li", { text: t("settings.help.windowsPi.step4") });
-        } else {
-            helpDiv.createEl("strong", { text: t("settings.help.linuxPi.title") });
-            const linuxList = helpDiv.createEl("ul");
-            linuxList.createEl("li", { text: t("settings.help.linuxPi.step1") });
-            linuxList.createEl("li", { text: t("settings.help.linuxPi.step2") });
-        }
     }
 
     private createNodePathSetting(containerEl: HTMLElement): void {
@@ -173,32 +154,6 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-
-        const helpDiv = containerEl.createDiv({ cls: "setting-item-description pi-platform-help" });
-
-        if (Platform.isMacOS) {
-            helpDiv.createEl("strong", { text: t("settings.help.macosNode.title") });
-            const macList = helpDiv.createEl("ul");
-            macList.createEl("li", { text: t("settings.help.macosNode.step1") });
-            macList.createEl("li", { text: t("settings.help.macosNode.step2") });
-            macList.createEl("li", { text: t("settings.help.macosNode.step3") });
-            macList.createEl("li", { text: t("settings.help.macosNode.step4") });
-        } else if (Platform.isWin) {
-            helpDiv.createEl("strong", { text: t("settings.help.windowsNode.title") });
-            const winList = helpDiv.createEl("ul");
-            winList.createEl("li", { text: t("settings.help.windowsNode.step1") });
-            const subList = winList.createEl("ul");
-            subList.createEl("li", { text: t("settings.help.windowsNode.powershell") });
-            subList.createEl("li", { text: t("settings.help.windowsNode.cmd") });
-            winList.createEl("li", { text: t("settings.help.windowsNode.step3") });
-            winList.createEl("li", { text: t("settings.help.windowsNode.step4") });
-            winList.createEl("li", { text: t("settings.help.windowsNode.step5") });
-        } else {
-            helpDiv.createEl("strong", { text: t("settings.help.linuxNode.title") });
-            const linuxList = helpDiv.createEl("ul");
-            linuxList.createEl("li", { text: t("settings.help.linuxNode.step1") });
-            linuxList.createEl("li", { text: t("settings.help.linuxNode.step2") });
-        }
     }
 
     private createProviderModelSettings(containerEl: HTMLElement): void {
@@ -227,5 +182,125 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+    }
+
+    /**
+     * Create API key input fields using Obsidian's SecretStorage.
+     * Reads required env vars from Pi's models.json and shows password input for each.
+     * Keys are stored securely in system keychain via SecretStorage.
+     */
+    private createApiKeySettings(containerEl: HTMLElement): void {
+        new Setting(containerEl).setHeading().setName(t("settings.apiKeys.heading"));
+
+        const piConfig = loadPiModelsConfig();
+
+        if (!piConfig) {
+            const noConfigDiv = containerEl.createDiv({ cls: "setting-item-description" });
+            noConfigDiv.setText(t("settings.apiKeys.noConfig"));
+            return;
+        }
+
+        const providers = getProviderInfo(piConfig);
+        const requiredEnvVars = getRequiredEnvVars(piConfig);
+
+        // Info explaining keys are stored securely
+        const infoDiv = containerEl.createDiv({ cls: "setting-item-description" });
+        infoDiv.setText(t("settings.apiKeys.info"));
+
+        // Create password input for each required env var
+        for (const envVar of requiredEnvVars) {
+            const providerNames = providers
+                .filter((p) => p.envVar === envVar)
+                .map((p) => p.name);
+
+            const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
+            const existingKey = this.app.secretStorage.getSecret(secretName);
+            const hasKey = !!existingKey;
+
+            new Setting(containerEl)
+                .setName(envVar)
+                .setDesc(t("settings.apiKeys.usedBy", { providers: providerNames.join(", "), stored: hasKey ? t("settings.apiKeys.keyStored") : "" }))
+                .addText((text) => {
+                    text
+                        .setPlaceholder(hasKey ? t("settings.apiKeys.enterNew") : t("settings.apiKeys.placeholder"))
+                        .setValue("") // Always show empty for security
+                        .inputEl.type = "password";
+                    text.inputEl.addClass("pi-api-key-input");
+                    
+                    text.inputEl.addEventListener("change", async () => {
+                        const value = text.inputEl.value;
+                        if (value) {
+                            // Store the key in SecretStorage
+                            await this.app.secretStorage.setSecret(secretName, value);
+                            text.inputEl.value = "";
+                            text.setPlaceholder(t("settings.apiKeys.keyStored"));
+                            new Notice(t("notices.keyStored", { envVar }));
+                            this.display(); // Refresh to update status
+                        }
+                    });
+                });
+        }
+
+        // Refresh button to reload providers
+        new Setting(containerEl)
+            .setName(t("settings.apiKeys.refresh"))
+            .setDesc(t("settings.apiKeys.refreshDesc"))
+            .addButton((btn) =>
+                btn
+                    .setIcon("refresh-cw")
+                    .setTooltip(t("settings.apiKeys.refreshTooltip"))
+                    .onClick(() => {
+                        this.display();
+                    })
+            );
+    }
+
+    private createPlatformHelpSections(containerEl: HTMLElement): void {
+        // macOS help
+        if (Platform.isMacOS) {
+            const macOSDiv = containerEl.createDiv({ cls: "pi-platform-help" });
+            macOSDiv.createEl("strong", { text: t("settings.help.macosPi.title") });
+
+            const steps = [
+                t("settings.help.macosPi.step1"),
+                t("settings.help.macosPi.step2"),
+                t("settings.help.macosPi.step3"),
+                t("settings.help.macosPi.step4"),
+            ];
+
+            for (const step of steps) {
+                macOSDiv.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        }
+
+        // Windows help
+        if (Platform.isWin) {
+            const winDiv = containerEl.createDiv({ cls: "pi-platform-help" });
+            winDiv.createEl("strong", { text: t("settings.help.windowsPi.title") });
+
+            const steps = [
+                t("settings.help.windowsPi.step1"),
+                t("settings.help.windowsPi.powershell"),
+                t("settings.help.windowsPi.cmd"),
+                t("settings.help.windowsPi.step3"),
+                t("settings.help.windowsPi.step4"),
+            ];
+
+            for (const step of steps) {
+                winDiv.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        }
+
+        // Linux help
+        if (Platform.isLinux) {
+            const linuxDiv = containerEl.createDiv({ cls: "pi-platform-help" });
+            linuxDiv.createEl("strong", { text: t("settings.help.linuxPi.title") });
+
+            const steps = [t("settings.help.linuxPi.step1"), t("settings.help.linuxPi.step2")];
+
+            for (const step of steps) {
+                linuxDiv.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        }
     }
 }

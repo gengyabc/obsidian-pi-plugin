@@ -11,6 +11,7 @@ import type { PiCommand } from "./commands";
 import { MessageStore } from "./message-store";
 import type { MessageStoreData } from "./message-store";
 import { t } from "./i18n/index";
+import { loadPiModelsConfig, getRequiredEnvVars } from "./pi-config";
 
 interface ModelOption {
     id: string;
@@ -117,7 +118,8 @@ export default class PiPlugin extends Plugin {
         const statusBarEl = this.addStatusBarItem();
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
-        // Plugin loaded
+        // Check for missing API keys and show notice
+        this.checkMissingApiKeys();
     }
 
     async onunload(): Promise<void> {
@@ -388,43 +390,29 @@ export default class PiPlugin extends Plugin {
             args.push("--model", this.settings.defaultModel);
         }
 
-        // Retrieve API keys from SecretStorage synchronously.
-        const retrieveSecrets = (): Record<string, string> => {
-            const secrets: Record<string, string> = {};
-            const secretNames = this.settings.apiSecretNames || {};
-
-            for (const [provider, secretName] of Object.entries(secretNames)) {
-                if (!secretName) continue;
-                try {
-                    const secretValue = this.app.secretStorage.getSecret(secretName);
-                    if (secretValue) {
-                        secrets[provider] = secretValue;
-                    }
-                } catch (err) {
-                    console.warn(`[Pi Plugin] Failed to retrieve secret '${secretName}':`, err);
+        // Retrieve API keys from SecretStorage
+        const apiKeys: Record<string, string> = {};  // envVarName -> key
+        const piConfig = loadPiModelsConfig();
+        if (piConfig) {
+            const requiredEnvVars = getRequiredEnvVars(piConfig);
+            for (const envVar of requiredEnvVars) {
+                const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
+                const key = this.app.secretStorage.getSecret(secretName);
+                if (key) {
+                    apiKeys[envVar] = key;
                 }
             }
-
-            // Fallback to legacy apiKeys for migration
-            const legacyKeys = this.settings.apiKeys || {};
-            for (const [provider, key] of Object.entries(legacyKeys)) {
-                if (key && !secrets[provider]) {
-                    secrets[provider] = key;
-                }
-            }
-
-            return secrets;
-        };
+        }
 
         try {
-            // Create connection and connect immediately so chat actions can respond right away.
+            // Create connection - API keys from SecretStorage passed as env vars
             this.connection = new PiConnection(
                 this.settings.piBinaryPath,
                 cwd,
                 args,
                 this.settings.nodePath,
                 this.settings.envVars,
-                retrieveSecrets(),
+                apiKeys,  // envVarName -> key from SecretStorage
                 this.settings.rpcTimeout
             );
 
@@ -528,6 +516,29 @@ export default class PiPlugin extends Plugin {
             const msg = err instanceof Error ? err.message : String(err);
             new Notice(t("notices.piError", { msg }));
             console.error("[Pi Plugin] Error sending prompt:", err);
+        }
+    }
+
+    /**
+     * Check for missing API keys based on Pi's models.json and show a notice.
+     */
+    private checkMissingApiKeys(): void {
+        const piConfig = loadPiModelsConfig();
+        if (!piConfig) return;  // No config file, nothing to check
+
+        const requiredEnvVars = getRequiredEnvVars(piConfig);
+        const missing: string[] = [];
+
+        for (const envVar of requiredEnvVars) {
+            const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
+            const key = this.app.secretStorage.getSecret(secretName);
+            if (!key) {
+                missing.push(envVar);
+            }
+        }
+
+        if (missing.length > 0) {
+            new Notice(`Missing API keys: ${missing.join(", ")}. Set them in Pi plugin settings.`);
         }
     }
 }

@@ -1,5 +1,13 @@
 // Mock obsidian module for testing
-// Only provides stubs for types used in settings.ts
+// Only provides stubs for types used in settings.ts and pi-config.ts
+
+export const Platform = {
+    isDesktop: true,
+    isMobile: false,
+    isMacOS: false,
+    isWin: false,
+    isLinux: false,
+};
 
 export class App {}
 export class PluginSettingTab {}
@@ -12,6 +20,9 @@ export class Setting {
     addDropdown(_cb: (dropdown: any) => void): this { return this; }
     addSlider(_cb: (slider: any) => void): this { return this; }
     addComponent(_cb: (el: any) => any): this { return this; }
+    addExtraButton(_cb: (btn: any) => any): this { return this; }
+    addButton(_cb: (btn: any) => any): this { return this; }
+    setHeading(): this { return this; }
 }
 export class SecretComponent {
     constructor(_app: App, _el: any) {}
