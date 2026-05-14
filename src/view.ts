@@ -1,6 +1,7 @@
 import { Component, ItemView, MarkdownRenderer, Notice, WorkspaceLeaf } from "obsidian";
 import type PiPlugin from "./main";
 import { t } from "./i18n/index";
+import { showCriticalNotice } from "./notices";
 import { MessageRenderer } from "./renderer";
 import { StreamHandler } from "./stream-handler";
 import type { ChatMessage } from "./message-types";
@@ -117,7 +118,7 @@ export class PiChatView extends ItemView {
             onMessageComplete: (msg) => this.handleStreamComplete(msg),
             onToolResult: (msg) => this.addMessage(msg),
             onCompaction: () => new Notice(t("notices.compacted")),
-            onError: (err) => new Notice(t("notices.piError", { msg: err })),
+            onError: (err) => showCriticalNotice(t("notices.piError", { msg: err })),
         });
     }
 
@@ -647,7 +648,7 @@ export class PiChatView extends ItemView {
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error("[Pi Chat] new_session RPC failed:", err);
-                new Notice(`Failed to create new session: ${msg}`);
+                showCriticalNotice(t("notices.newSessionFailed", { msg }));
                 return;
             }
         }
@@ -715,7 +716,7 @@ export class PiChatView extends ItemView {
             }
         } catch (err) {
             console.warn("[Pi Chat] switch_session RPC failed:", err);
-            new Notice(t("notices.switchFailed"));
+            showCriticalNotice(t("notices.switchFailed"));
             return;
         }
 
@@ -1039,7 +1040,7 @@ export class PiChatView extends ItemView {
             this.scrollToBottom();
         } catch (err) {
             console.warn("[Pi Chat] get_messages failed:", err);
-            new Notice(t("notices.messagesLoadFailed"));
+            showCriticalNotice(t("notices.messagesLoadFailed"));
         }
     }
 
@@ -1146,7 +1147,7 @@ export class PiChatView extends ItemView {
             }
 
             const message = err instanceof Error ? err.message : String(err);
-            new Notice(`Rewind failed: ${message}`);
+            showCriticalNotice(t("notices.rewindFailed", { msg: message }));
         } finally {
             this.activeExtensionUiOwner = null;
             this.pendingRewindUiRequestIds.clear();
@@ -1207,7 +1208,7 @@ export class PiChatView extends ItemView {
             console.error("[Pi Chat] Return to latest failed:", err);
 
             const message = err instanceof Error ? err.message : String(err);
-            new Notice(`Return failed: ${message}`);
+            showCriticalNotice(t("notices.returnFailed", { msg: message }));
         } finally {
             this.activeExtensionUiOwner = null;
             this.setRewindBusy(false);
@@ -1432,7 +1433,7 @@ export class PiChatView extends ItemView {
                 })
                 .catch((err) => {
                     console.error("[Pi Chat] Failed to send message:", err);
-                    new Notice(t("notices.sendFailed"));
+                    showCriticalNotice(t("notices.sendFailed"));
                     this.removeThinkingIndicator();
                     if (!isSteering) {
                         this.setStreamingState(false);
@@ -1445,7 +1446,7 @@ export class PiChatView extends ItemView {
             }
         } catch (err) {
             console.error("[Pi Chat] Failed to send message:", err);
-            new Notice(t("notices.sendFailed"));
+            showCriticalNotice(t("notices.sendFailed"));
             this.removeThinkingIndicator();
             if (!isSteering) {
                 this.setStreamingState(false);

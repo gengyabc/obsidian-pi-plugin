@@ -124,6 +124,7 @@
   "notices.copied": "Copied to clipboard",
   "notices.copyFailed": "Failed to copy message",
   "notices.disconnected": "Pi disconnected. Use 'Pi: send prompt' to reconnect.",
+  "notices.reconnected": "Pi reconnected with new API key.",
   "notices.mobileUnsupported": "Pi plugin requires desktop Obsidian (mobile not supported). Please use Obsidian on desktop to connect to Pi.",
   "notices.startFailed": "Failed to start Pi: {{msg}}. Check binary path in settings.",
   "notices.secretsFailed": "Failed to retrieve API keys from secure storage",
@@ -166,11 +167,15 @@
   "notices.returnCancelled": "Return was cancelled by Pi",
   "notices.returnSuccess": "Returned to latest",
   "notices.messagesLoadFailed": "Failed to load messages from Pi",
+  "notices.newSessionFailed": "Failed to create new session: {{msg}}",
+  "notices.rewindFailed": "Rewind failed: {{msg}}",
+  "notices.returnFailed": "Return failed: {{msg}}",
   "notices.renameFailed": "Failed to rename session",
   "notices.abortConnectionLost": "Connection lost — resetting view",
   "notices.renderError": "⚠️ Failed to render message",
   "notices.fileTooLarge": "File too large ({{size}}MB). Max 1MB.",
   "notices.fileReadFailed": "Failed to read file",
+  "notices.missingApiKeys": "Missing API keys: {{keys}}. Set them in Pi plugin settings.",
   "attachment.attached": "Attached: {{names}}",
   "attachment.imagesAttached": "{{count}} image(s) attached"
 }

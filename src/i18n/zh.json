@@ -124,6 +124,7 @@
   "notices.copied": "已复制到剪贴板",
   "notices.copyFailed": "复制消息失败",
   "notices.disconnected": "Pi 已断开。使用 'Pi: 发送提示' 重新连接。",
+  "notices.reconnected": "Pi 已使用新 API 密钥重新连接。",
   "notices.mobileUnsupported": "Pi 插件需要桌面版 Obsidian（不支持移动端）。请在桌面版 Obsidian 连接 Pi。",
   "notices.startFailed": "启动 Pi 失败: {{msg}}。请检查设置中的二进制路径。",
   "notices.secretsFailed": "从安全存储获取 API 密钥失败",
@@ -166,11 +167,15 @@
   "notices.returnCancelled": "返回被 Pi 取消",
   "notices.returnSuccess": "已返回最新",
   "notices.messagesLoadFailed": "从 Pi 加载消息失败",
+  "notices.newSessionFailed": "新建会话失败: {{msg}}",
+  "notices.rewindFailed": "回溯失败: {{msg}}",
+  "notices.returnFailed": "返回失败: {{msg}}",
   "notices.renameFailed": "重命名会话失败",
   "notices.abortConnectionLost": "连接丢失 — 正在重置视图",
   "notices.renderError": "⚠️ 渲染消息失败",
   "notices.fileTooLarge": "文件过大 ({{size}}MB)。最大 1MB。",
   "notices.fileReadFailed": "读取文件失败",
+  "notices.missingApiKeys": "缺少 API 密钥: {{keys}}。请在 Pi 插件设置中配置。",
   "attachment.attached": "已附加: {{names}}",
   "attachment.imagesAttached": "{{count}} 张图片已附加"
 }

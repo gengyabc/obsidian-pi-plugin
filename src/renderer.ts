@@ -1,4 +1,4 @@
-import { App, Component, MarkdownRenderer } from "obsidian";
+import { App, Component, MarkdownRenderer, Notice } from "obsidian";
 import { t } from "./i18n/index";
 
 /** Actions available on a user message. */
@@ -14,9 +14,20 @@ export interface UserMessageActions {
  */
 export class MessageRenderer {
     private app: App;
+    /** Debounce render error notices - only show once every 5 seconds */
+    private lastRenderErrorTime = 0;
 
     constructor(app: App) {
         this.app = app;
+    }
+
+    /** Show render error notice if debounce allows */
+    private showRenderError(): void {
+        const now = Date.now();
+        if (now - this.lastRenderErrorTime > 5000) {
+            this.lastRenderErrorTime = now;
+            new Notice(t("notices.renderError"));
+        }
     }
 
     /**
@@ -44,6 +55,7 @@ export class MessageRenderer {
             } catch (err) {
                 console.error("[Pi Chat] Thinking render error:", err);
                 thinkingContentEl.setText(thinkingContent);
+                this.showRenderError();
             }
         }
 
@@ -55,6 +67,7 @@ export class MessageRenderer {
             } catch (err) {
                 console.error("[Pi Chat] Markdown rendering error:", err);
                 contentEl.setText(markdown);
+                this.showRenderError();
             }
         }
 
@@ -153,6 +166,7 @@ export class MessageRenderer {
                     console.error("[Pi Chat] Tool result render error:", err);
                     const pre = resultContent.createEl("pre");
                     pre.createEl("code", { text: result });
+                    this.showRenderError();
                 }
             } else {
                 const pre = resultContent.createEl("pre");

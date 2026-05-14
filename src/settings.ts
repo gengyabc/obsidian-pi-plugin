@@ -235,6 +235,8 @@ export class PiSettingTab extends PluginSettingTab {
                             text.inputEl.value = "";
                             text.setPlaceholder(t("settings.apiKeys.keyStored"));
                             new Notice(t("notices.keyStored", { envVar }));
+                            // Reconnect to pick up the new key
+                            this.plugin.reconnectAfterKeyChange();
                             this.display(); // Refresh to update status
                         }
                     });

@@ -1,4 +1,5 @@
 import { FuzzySuggestModal, Notice, Plugin, WorkspaceLeaf } from "obsidian";
+import { showCriticalNotice } from "./notices";
 import { PiConnection } from "./rpc";
 import { DEFAULT_SETTINGS, PiSettingTab } from "./settings";
 import type { PiPluginSettings } from "./settings";
@@ -374,7 +375,7 @@ export default class PiPlugin extends Plugin {
         // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
         if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
-            new Notice(t("notices.mobileUnsupported"));
+            showCriticalNotice(t("notices.mobileUnsupported"));
             throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
         const vaultRoot = (adapter as any).getBasePath() as string;
@@ -436,7 +437,7 @@ export default class PiPlugin extends Plugin {
                 if (view) {
                     view.handleDisconnect();
                 }
-                new Notice(t("notices.disconnected"));
+                showCriticalNotice(t("notices.disconnected"));
                 this.connection = null;
             });
 
@@ -449,7 +450,7 @@ export default class PiPlugin extends Plugin {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error("[Pi Plugin] Failed to connect to Pi:", err);
-            new Notice(t("notices.startFailed", { msg }));
+            showCriticalNotice(t("notices.startFailed", { msg }));
             this.connection = null;
         }
 
@@ -489,13 +490,13 @@ export default class PiPlugin extends Plugin {
                     this.statusBar?.refreshModel();
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    new Notice(t("notices.modelSwitchFailed", { msg }));
+                    showCriticalNotice(t("notices.modelSwitchFailed", { msg }));
                 }
             });
             modal.open();
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            new Notice(t("notices.modelsFetchFailed", { msg }));
+            showCriticalNotice(t("notices.modelsFetchFailed", { msg }));
         }
     }
 
@@ -520,6 +521,28 @@ export default class PiPlugin extends Plugin {
     }
 
     /**
+     * Reconnect to Pi after API key change.
+     * Destroys existing connection and creates a new one with updated keys.
+     */
+    reconnectAfterKeyChange(): void {
+        const hadConnection = this.connection !== null;
+        if (this.connection) {
+            this.connection.destroy();
+            this.connection = null;
+        }
+        // Create new connection with updated keys from SecretStorage
+        try {
+            this.ensureConnection();
+            // Only show notice if we actually restarted a connection
+            if (hadConnection) {
+                new Notice(t("notices.reconnected"));
+            }
+        } catch (err) {
+            // ensureConnection already shows error notice
+        }
+    }
+
+    /**
      * Check for missing API keys based on Pi's models.json and show a notice.
      */
     private checkMissingApiKeys(): void {
@@ -538,7 +561,7 @@ export default class PiPlugin extends Plugin {
         }
 
         if (missing.length > 0) {
-            new Notice(`Missing API keys: ${missing.join(", ")}. Set them in Pi plugin settings.`);
+            showCriticalNotice(t("notices.missingApiKeys", { keys: missing.join(", ") }));
         }
     }
 }
