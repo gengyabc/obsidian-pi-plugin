@@ -433,7 +433,7 @@ export class PiChatView extends ItemView {
                     modelText += ` :${thinkingLevel}`;
                 }
                 this.headerModel.setText(modelText);
-                this.headerModel.style.display = modelText ? "" : "none";
+                this.headerModel.classList.toggle("is-hidden", !modelText);
             }
 
             // Working directory
@@ -442,7 +442,7 @@ export class PiChatView extends ItemView {
                 // Show just the last directory component
                 const shortCwd = cwd ? cwd.replace(/^.*\//, "") : "";
                 this.headerCwd.setText(shortCwd ? `📁 ${shortCwd}` : "");
-                this.headerCwd.style.display = shortCwd ? "" : "none";
+                this.headerCwd.classList.toggle("is-hidden", !shortCwd);
                 if (cwd) this.headerCwd.setAttribute("title", cwd);
             }
         } catch {
@@ -1632,7 +1632,7 @@ export class PiChatView extends ItemView {
     private setStreamingState(streaming: boolean): void {
         this.streaming = streaming;
         if (this.abortBtn) {
-            this.abortBtn.style.display = streaming ? "inline-block" : "none";
+            this.abortBtn.classList.toggle("is-hidden", !streaming);
         }
         if (this.chatInput) {
             this.chatInput.setPlaceholder(

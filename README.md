@@ -4,6 +4,8 @@ Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/p
 
 > **Desktop only.** Requires Pi installed locally (`npm i -g @earendil-works/pi-coding-agent`).
 
+**English** | [中文](README-zh.md)
+
 ## Features
 
 ### Chat View

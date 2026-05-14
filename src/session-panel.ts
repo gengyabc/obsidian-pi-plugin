@@ -39,8 +39,7 @@ export class SessionPanel {
         this.scanner = new SessionScanner(sessionsDir);
 
         // Panel container — hidden by default
-        this.containerEl = parentEl.createDiv({ cls: "pi-session-panel" });
-        this.containerEl.style.display = "none";
+        this.containerEl = parentEl.createDiv({ cls: "pi-session-panel is-hidden" });
 
         // Panel header
         const header = this.containerEl.createDiv({ cls: "pi-session-panel-header" });
@@ -80,7 +79,7 @@ export class SessionPanel {
      */
     async show(): Promise<void> {
         this.visible = true;
-        this.containerEl.style.display = "";
+        this.containerEl.removeClass("is-hidden");
         await this.refresh();
         this.searchEl.focus();
     }
@@ -90,7 +89,7 @@ export class SessionPanel {
      */
     hide(): void {
         this.visible = false;
-        this.containerEl.style.display = "none";
+        this.containerEl.addClass("is-hidden");
     }
 
     /**

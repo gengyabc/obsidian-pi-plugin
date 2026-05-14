@@ -1,5 +1,5 @@
 {
-    "name": "obsidian-pi-plugin",
+    "name": "pi-chat",
     "version": "0.1.0",
     "description": "Chat with Pi coding agent inside Obsidian",
     "type": "module",
@@ -11,7 +11,7 @@
         "test:watch": "vitest"
     },
     "keywords": [],
-    "author": "Willow",
+    "author": "Geng",
     "license": "MIT",
     "devDependencies": {
         "@types/node": "^16.11.6",

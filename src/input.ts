@@ -206,9 +206,7 @@ export class ChatInput {
     private autoResize(): void {
         const el = this.textareaEl;
         el.style.height = "auto";
-        // Clamp to max-height defined in CSS (200px)
-        const maxHeight = 200;
-        el.style.height = Math.min(el.scrollHeight, maxHeight) + "px";
+        el.style.height = Math.min(el.scrollHeight, 200) + "px";
     }
 
     private handlePaste(e: ClipboardEvent): void {
@@ -263,28 +261,24 @@ export class ChatInput {
     private renderAttachments(): void {
         this.attachmentsEl.empty();
         if (this.attachments.length === 0) {
-            this.attachmentsEl.style.display = "none";
+            this.attachmentsEl.addClass("is-hidden");
             return;
         }
 
-        this.attachmentsEl.style.display = "flex";
+        this.attachmentsEl.removeClass("is-hidden");
 
         this.attachments.forEach((att, index) => {
             const chip = this.attachmentsEl.createDiv({ cls: "pi-attachment-chip" });
 
             if (att.type === "image") {
                 // Show tiny thumbnail for images
-                const thumb = chip.createEl("img", {
+                chip.createEl("img", {
                     cls: "pi-attachment-thumb",
                     attr: {
                         src: `data:${att.mimeType};base64,${att.content}`,
                         alt: att.name,
                     },
                 });
-                thumb.style.width = "16px";
-                thumb.style.height = "16px";
-                thumb.style.objectFit = "cover";
-                thumb.style.borderRadius = "2px";
             }
 
             chip.createSpan({

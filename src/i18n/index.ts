@@ -32,10 +32,11 @@ function getLang(): string {
         return 'en';
     }
     // Try moment.js locale first (Obsidian bundles moment)
-    const momentLang = (window as unknown as Record<string, unknown>).moment
-        ? ((window as unknown as Record<string, unknown>).moment as { locale?: () => string })?.locale?.()
+    const activeWindow = window;
+    const momentLang = (activeWindow as unknown as Record<string, unknown>).moment
+        ? ((activeWindow as unknown as Record<string, unknown>).moment as { locale?: () => string })?.locale?.()
         : undefined;
-    const lang = momentLang ?? localStorage.getItem('language') ?? 'en';
+    const lang = momentLang ?? activeWindow.localStorage.getItem('language') ?? 'en';
     const normalized = String(lang).toLowerCase();
     if (normalized.startsWith('zh')) return 'zh';
     return 'en';

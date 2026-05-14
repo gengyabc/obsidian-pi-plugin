@@ -1,5 +1,17 @@
-import { ChildProcess, spawn } from "child_process";
-import { createInterface, Interface as ReadlineInterface } from "readline";
+import { Platform } from "obsidian";
+
+// Guard Node.js imports for desktop-only (Rule 36)
+let spawn: typeof import("child_process").spawn;
+let createInterface: typeof import("readline").createInterface;
+type ChildProcess = import("child_process").ChildProcess;
+type ReadlineInterface = import("readline").Interface;
+
+if (Platform.isDesktop) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ({ spawn } = require("child_process"));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ({ createInterface } = require("readline"));
+}
 
 export type EventHandler = (event: RpcEvent) => void;
 

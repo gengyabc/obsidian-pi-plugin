@@ -1,18 +1,12 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting } from "obsidian";
 import type PiPlugin from "./main";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
 import { t } from "./i18n/index";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
     nodePath: string;
     envVars: string;
-    // Secret names for API keys (stored in Obsidian's SecretStorage)
-    // These are names like "pi-anthropic-key", not the actual keys
     apiSecretNames: Record<string, string>;
-    // Legacy: direct API key storage (deprecated, for migration)
     apiKeys: Record<string, string>;
     workingDirectory: string;
     defaultProvider: string;
@@ -20,41 +14,23 @@ export interface PiPluginSettings {
     sessionSaveDir: string;
     persistSessions: boolean;
     thinkingLevel: string;
-    rpcTimeout: number;  // milliseconds
+    rpcTimeout: number;
 }
 
 export const DEFAULT_SETTINGS: PiPluginSettings = {
     piBinaryPath: "pi",
-    nodePath: "",  // empty = auto-detect
-    envVars: "",  // comma-separated env var names to pass
-    apiSecretNames: {},  // provider -> secret name (e.g. {"anthropic": "pi-anthropic-key"})
-    apiKeys: {},  // DEPRECATED: legacy direct key storage (for migration)
-    workingDirectory: "",  // empty = vault root
+    nodePath: "",
+    envVars: "",
+    apiSecretNames: {},
+    apiKeys: {},
+    workingDirectory: "",
     defaultProvider: "",
     defaultModel: "",
     sessionSaveDir: "Pi-Sessions",
     persistSessions: true,
     thinkingLevel: "medium",
-    rpcTimeout: 60_000,  // 60 seconds default
+    rpcTimeout: 60_000,
 };
-
-/**
- * Pi models.json structure (simplified)
- */
-interface PiModelsConfig {
-    providers?: Record<string, {
-        apiKey?: string;
-        models?: Array<{ id: string; name?: string }>;
-    }>;
-}
-
-/**
- * Pi settings.json structure (simplified)
- */
-interface PiSettingsConfig {
-    defaultProvider?: string;
-    defaultModel?: string;
-}
 
 export class PiSettingTab extends PluginSettingTab {
     plugin: PiPlugin;
@@ -68,12 +44,9 @@ export class PiSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl("h2", { text: t("settings.title") });
+        new Setting(containerEl).setHeading().setName(t("settings.title"));
 
-        // Pi binary path with platform-specific help
         this.createPiBinaryPathSetting(containerEl);
-
-        // Node path with platform-specific help
         this.createNodePathSetting(containerEl);
 
         new Setting(containerEl)
@@ -90,7 +63,6 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Working directory
         new Setting(containerEl)
             .setName(t("settings.workingDir.name"))
             .setDesc(t("settings.workingDir.desc"))
@@ -104,10 +76,8 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Default provider and model (pre-fill from pi config)
         this.createProviderModelSettings(containerEl);
 
-        // Session persistence
         new Setting(containerEl)
             .setName(t("settings.sessionDir.name"))
             .setDesc(t("settings.sessionDir.desc"))
@@ -133,7 +103,6 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Thinking level
         new Setting(containerEl)
             .setName(t("settings.thinkingLevel.name"))
             .setDesc(t("settings.thinkingLevel.desc"))
@@ -165,21 +134,16 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Platform-specific instructions
-        const platform = os.platform();
-        const helpDiv = containerEl.createDiv({ cls: "setting-item-description" });
-        helpDiv.style.marginLeft = "0";
-        helpDiv.style.marginTop = "0.5em";
-        helpDiv.style.marginBottom = "1em";
+        const helpDiv = containerEl.createDiv({ cls: "setting-item-description pi-platform-help" });
 
-        if (platform === "darwin") {
+        if (Platform.isMacOS) {
             helpDiv.createEl("strong", { text: t("settings.help.macosPi.title") });
             const macList = helpDiv.createEl("ul");
             macList.createEl("li", { text: t("settings.help.macosPi.step1") });
             macList.createEl("li", { text: t("settings.help.macosPi.step2") });
             macList.createEl("li", { text: t("settings.help.macosPi.step3") });
             macList.createEl("li", { text: t("settings.help.macosPi.step4") });
-        } else if (platform === "win32") {
+        } else if (Platform.isWin) {
             helpDiv.createEl("strong", { text: t("settings.help.windowsPi.title") });
             const winList = helpDiv.createEl("ul");
             winList.createEl("li", { text: t("settings.help.windowsPi.step1") });
@@ -210,21 +174,16 @@ export class PiSettingTab extends PluginSettingTab {
                     })
             );
 
-        // Platform-specific instructions
-        const platform = os.platform();
-        const helpDiv = containerEl.createDiv({ cls: "setting-item-description" });
-        helpDiv.style.marginLeft = "0";
-        helpDiv.style.marginTop = "0.5em";
-        helpDiv.style.marginBottom = "1em";
+        const helpDiv = containerEl.createDiv({ cls: "setting-item-description pi-platform-help" });
 
-        if (platform === "darwin") {
+        if (Platform.isMacOS) {
             helpDiv.createEl("strong", { text: t("settings.help.macosNode.title") });
             const macList = helpDiv.createEl("ul");
             macList.createEl("li", { text: t("settings.help.macosNode.step1") });
             macList.createEl("li", { text: t("settings.help.macosNode.step2") });
             macList.createEl("li", { text: t("settings.help.macosNode.step3") });
             macList.createEl("li", { text: t("settings.help.macosNode.step4") });
-        } else if (platform === "win32") {
+        } else if (Platform.isWin) {
             helpDiv.createEl("strong", { text: t("settings.help.windowsNode.title") });
             const winList = helpDiv.createEl("ul");
             winList.createEl("li", { text: t("settings.help.windowsNode.step1") });
@@ -242,27 +201,10 @@ export class PiSettingTab extends PluginSettingTab {
         }
     }
 
-
-
     private createProviderModelSettings(containerEl: HTMLElement): void {
-        // Read pi config to get defaults
-        const piConfig = this.readPiConfig();
-        const piDefaults = piConfig.settingsConfig;
-
-        const defaultProvider = this.plugin.settings.defaultProvider || piDefaults?.defaultProvider || "";
-        const defaultModel = this.plugin.settings.defaultModel || piDefaults?.defaultModel || "";
-
-        const providerDesc = piDefaults?.defaultProvider
-            ? t("settings.defaultProvider.descConfig", { provider: piDefaults.defaultProvider })
-            : t("settings.defaultProvider.desc");
-
-        const modelDesc = piDefaults?.defaultModel
-            ? t("settings.defaultModel.descConfig", { model: piDefaults.defaultModel })
-            : t("settings.defaultModel.desc");
-
         new Setting(containerEl)
             .setName(t("settings.defaultProvider.name"))
-            .setDesc(providerDesc)
+            .setDesc(t("settings.defaultProvider.desc"))
             .addText((text) =>
                 text
                     .setPlaceholder(t("settings.defaultProvider.placeholder"))
@@ -275,7 +217,7 @@ export class PiSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName(t("settings.defaultModel.name"))
-            .setDesc(modelDesc)
+            .setDesc(t("settings.defaultModel.desc"))
             .addText((text) =>
                 text
                     .setPlaceholder(t("settings.defaultModel.placeholder"))
@@ -285,38 +227,5 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
-    }
-
-    /**
-     * Read pi's configuration files.
-     */
-    private readPiConfig(): { modelsConfig: PiModelsConfig | null; settingsConfig: PiSettingsConfig | null } {
-        const homeDir = os.homedir();
-        const piAgentDir = path.join(homeDir, ".pi", "agent");
-
-        let modelsConfig: PiModelsConfig | null = null;
-        let settingsConfig: PiSettingsConfig | null = null;
-
-        try {
-            const modelsPath = path.join(piAgentDir, "models.json");
-            if (fs.existsSync(modelsPath)) {
-                const content = fs.readFileSync(modelsPath, "utf-8");
-                modelsConfig = JSON.parse(content);
-            }
-        } catch (err) {
-            console.warn("[Pi Plugin] Failed to read models.json:", err);
-        }
-
-        try {
-            const settingsPath = path.join(piAgentDir, "settings.json");
-            if (fs.existsSync(settingsPath)) {
-                const content = fs.readFileSync(settingsPath, "utf-8");
-                settingsConfig = JSON.parse(content);
-            }
-        } catch (err) {
-            console.warn("[Pi Plugin] Failed to read settings.json:", err);
-        }
-
-        return { modelsConfig, settingsConfig };
     }
 }

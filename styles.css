@@ -1,5 +1,21 @@
 /* Pi Plugin — Chat View Styles */
 
+/* Utility: hide elements via CSS class instead of inline styles */
+.pi-session-panel.is-hidden,
+.pi-attachments.is-hidden,
+.pi-abort-btn.is-hidden,
+.pi-header-model.is-hidden,
+.pi-header-cwd.is-hidden {
+    display: none !important;
+}
+
+/* Platform help spacing */
+.pi-platform-help {
+    margin-left: 0;
+    margin-top: 0.5em;
+    margin-bottom: 1em;
+}
+
 /* ── Layout ── */
 .pi-chat-container {
     display: flex;
@@ -502,6 +518,10 @@
 
 .pi-attachment-thumb {
     flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    object-fit: cover;
+    border-radius: 2px;
 }
 
 /* ── Thinking ── */

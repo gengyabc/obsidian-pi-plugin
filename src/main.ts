@@ -70,7 +70,7 @@ export default class PiPlugin extends Plugin {
         );
 
         // Ribbon icon to open chat
-        this.addRibbonIcon("message-circle", "Open Pi Chat", () => {
+        this.addRibbonIcon("message-circle", "Open Pi chat", () => {
             this.activateView();
         });
 
@@ -117,10 +117,7 @@ export default class PiPlugin extends Plugin {
         const statusBarEl = this.addStatusBarItem();
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
-
-        
-
-        console.log("[Pi Plugin] Loaded");
+        // Plugin loaded
     }
 
     async onunload(): Promise<void> {
@@ -129,8 +126,8 @@ export default class PiPlugin extends Plugin {
         if (view && view.hasMessages()) {
             try {
                 await view.autoSave();
-            } catch (err) {
-                console.error("[Pi Plugin] Failed to save session on unload:", err);
+            } catch {
+                // Non-fatal: auto-save best effort on unload
             }
         }
 
@@ -145,7 +142,7 @@ export default class PiPlugin extends Plugin {
             this.connection.destroy();
             this.connection = null;
         }
-        console.log("[Pi Plugin] Unloaded");
+        // Plugin unloaded
     }
 
     /**
@@ -456,7 +453,7 @@ export default class PiPlugin extends Plugin {
             });
 
             // Refresh status bar and register commands once connected
-            setTimeout(() => {
+            activeWindow?.setTimeout(() => {
                 this.statusBar?.refreshModel();
                 this.statusBar?.refreshStats();
                 this.registerPiCommands();

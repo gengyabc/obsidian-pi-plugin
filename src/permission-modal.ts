@@ -46,21 +46,38 @@ export class PermissionSelectModal extends Modal {
         // Options as buttons
         const optionsContainer = contentEl.createDiv({ cls: "pi-permission-options" });
         for (const option of this.options) {
-            optionsContainer.createEl("button", {
+            const btn = optionsContainer.createEl("button", {
                 cls: "pi-permission-option-btn",
                 text: option,
-            }).addEventListener("click", () => {
+                attr: { type: "button" },
+            });
+            btn.addEventListener("click", () => {
                 this.selectedOption = option;
                 this.close();
+            });
+            btn.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    this.selectedOption = option;
+                    this.close();
+                }
             });
         }
 
         // Cancel button
-        contentEl.createEl("button", {
+        const cancelBtn = contentEl.createEl("button", {
             cls: "pi-permission-cancel-btn",
             text: t("modals.cancel"),
-        }).addEventListener("click", () => {
+            attr: { type: "button" },
+        });
+        cancelBtn.addEventListener("click", () => {
             this.close();
+        });
+        cancelBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.close();
+            }
         });
     }
 
@@ -111,18 +128,36 @@ export class PermissionConfirmModal extends Modal {
 
         // Buttons
         const buttonsContainer = contentEl.createDiv({ cls: "pi-permission-buttons" });
-        buttonsContainer.createEl("button", {
+        const confirmBtn = buttonsContainer.createEl("button", {
             cls: "pi-permission-confirm-btn",
             text: t("modals.confirmYes"),
-        }).addEventListener("click", () => {
+            attr: { type: "button" },
+        });
+        confirmBtn.addEventListener("click", () => {
             this.confirmed = true;
             this.close();
         });
-        buttonsContainer.createEl("button", {
+        confirmBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.confirmed = true;
+                this.close();
+            }
+        });
+
+        const cancelBtn = buttonsContainer.createEl("button", {
             cls: "pi-permission-cancel-btn",
             text: t("modals.confirmNo"),
-        }).addEventListener("click", () => {
+            attr: { type: "button" },
+        });
+        cancelBtn.addEventListener("click", () => {
             this.close();
+        });
+        cancelBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.close();
+            }
         });
     }
 
@@ -189,19 +224,38 @@ export class PermissionInputModal extends Modal {
 
         // Buttons
         const buttonsContainer = contentEl.createDiv({ cls: "pi-permission-buttons" });
-        buttonsContainer.createEl("button", {
+        const submitBtn = buttonsContainer.createEl("button", {
             cls: "pi-permission-confirm-btn",
             text: t("modals.submit"),
-        }).addEventListener("click", () => {
+            attr: { type: "button" },
+        });
+        submitBtn.addEventListener("click", () => {
             this.inputValue = inputEl.value;
             this.close();
         });
-        buttonsContainer.createEl("button", {
+        submitBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.inputValue = inputEl.value;
+                this.close();
+            }
+        });
+
+        const cancelBtn2 = buttonsContainer.createEl("button", {
             cls: "pi-permission-cancel-btn",
             text: t("modals.cancel"),
-        }).addEventListener("click", () => {
+            attr: { type: "button" },
+        });
+        cancelBtn2.addEventListener("click", () => {
             this.inputValue = null;
             this.close();
+        });
+        cancelBtn2.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.inputValue = null;
+                this.close();
+            }
         });
     }
 

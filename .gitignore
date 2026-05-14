@@ -25,3 +25,6 @@ data.json
 # Logs
 *.log
 npm-debug.log*
+
+# pi
+.pi

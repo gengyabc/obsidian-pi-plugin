@@ -1,5 +1,5 @@
 {
-  "settings.title": "Pi 插件设置",
+  "settings.title": "通用",
   "settings.piPath.name": "Pi 二进制路径",
   "settings.piPath.desc": "pi 可执行文件的完整路径。默认: pi (使用 PATH)",
   "settings.piPath.placeholder": "pi",
