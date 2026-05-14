@@ -167,9 +167,9 @@ export class PiChatView extends ItemView {
         // Input container with ChatInput, abort button, and attachment support
         this.inputContainer = container.createDiv({ cls: "pi-input-container" });
         this.chatInput = new ChatInput(this.inputContainer, {
-            onSend: (text, attachments) => this.sendMessage(text, attachments),
-            onSlashTyped: () => this.triggerCommandSuggest(),
-            onAtTyped: () => this.triggerFilePicker(),
+            onSend: (text, attachments) => { void this.sendMessage(text, attachments); },
+            onSlashTyped: () => { void this.triggerCommandSuggest(); },
+            onAtTyped: () => { void this.triggerFilePicker(); },
         });
 
         // Add abort button to the input area (hidden by default)
@@ -211,7 +211,7 @@ export class PiChatView extends ItemView {
         this.streamHandler.reset();
         this.removeThinkingIndicator();
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -300,15 +300,15 @@ export class PiChatView extends ItemView {
         }
 
         this.rpcEventHandler = (event) => {
-            if ((event.type as string) === "extension_ui_request") {
+            if (event.type === "extension_ui_request") {
                 this.handleExtensionUiRequest(event as unknown as ExtensionUiRequest);
                 return;
             }
 
             this.streamHandler.handleEvent(event);
-            if ((event.type as string) === "agent_end") {
+            if (event.type === "agent_end") {
                 this.refreshHeader();
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     this.updateCurrentSessionFromPi()
                         .then(() => this.syncForkEntryIds())
                         .catch((err) =>
@@ -322,7 +322,7 @@ export class PiChatView extends ItemView {
         this.commandSuggest.setConnection(conn);
 
         // Initial header refresh + restore last session after connection
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
             this.refreshHeader();
             void this.restoreSession();
         }, 1000);
@@ -338,7 +338,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_state" });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             const sessionFile = data?.sessionFile as string | undefined;
             if (sessionFile) {
                 this.currentSessionPath = sessionFile;
@@ -408,7 +408,7 @@ export class PiChatView extends ItemView {
             attr: { "aria-label": t("view.newBtn.tooltip") },
         });
         newBtn.setText("+ New");
-        newBtn.addEventListener("click", () => this.newSessionFromHeader());
+        newBtn.addEventListener("click", () => { void this.newSessionFromHeader(); });
     }
 
     /**
@@ -420,7 +420,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_state" });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             if (!data) return;
 
             // Session name
@@ -523,7 +523,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_messages" });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             const rawMessages = data?.messages as Array<Record<string, unknown>> | undefined;
             if (!Array.isArray(rawMessages) || rawMessages.length === 0) return;
 
@@ -647,7 +647,7 @@ export class PiChatView extends ItemView {
         if (conn?.isConnected()) {
             try {
                 const response = await conn.send({ type: "new_session" });
-                const data = response.data as Record<string, unknown> | undefined;
+                const data = response.data;
                 if (data?.cancelled) {
                     new Notice(t("notices.newSessionCancelled"));
                     return;
@@ -665,7 +665,7 @@ export class PiChatView extends ItemView {
             const conn = this.plugin.connection;
             if (conn?.isConnected()) {
                 const state = await conn.send({ type: "get_state" });
-                const data = state.data as Record<string, unknown> | undefined;
+                const data = state.data;
                 const sessionFile = data?.sessionFile as string | undefined;
                 if (sessionFile) {
                     this.currentSessionPath = sessionFile;
@@ -716,7 +716,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "switch_session", sessionPath: session.path });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             if (data?.cancelled) {
                 new Notice(t("notices.switchCancelled"));
                 return;
@@ -771,7 +771,7 @@ export class PiChatView extends ItemView {
             const messages: ChatMessage[] = [];
             for (const line of lines) {
                 try {
-                    const entry = JSON.parse(line);
+                    const entry = JSON.parse(line) as { type: string; message?: Record<string, unknown> };
                     // Pi wraps messages in { type: "message", message: { role, content, ... } }
                     if (entry.type !== "message" || !entry.message) continue;
 
@@ -783,14 +783,14 @@ export class PiChatView extends ItemView {
                             id: generateMessageId(),
                             role: "user",
                             content: text,
-                            timestamp: msg.timestamp || Date.now(),
+                            timestamp: (msg.timestamp as number) || Date.now(),
                         });
                     } else if (msg.role === "assistant" && text) {
                         messages.push({
                             id: generateMessageId(),
                             role: "assistant",
                             content: text,
-                            timestamp: msg.timestamp || Date.now(),
+                            timestamp: (msg.timestamp as number) || Date.now(),
                         });
                     } else if (msg.role === "toolResult") {
                         const resultText = this.extractMessageText(msg.content);
@@ -799,10 +799,10 @@ export class PiChatView extends ItemView {
                                 id: generateMessageId(),
                                 role: "tool",
                                 content: resultText,
-                                toolName: msg.toolName || "tool",
-                                toolCallId: msg.toolCallId,
-                                isError: msg.isError || undefined,
-                                timestamp: msg.timestamp || Date.now(),
+                                toolName: (msg.toolName as string) || "tool",
+                                toolCallId: msg.toolCallId as string | undefined,
+                                isError: msg.isError as boolean | undefined,
+                                timestamp: (msg.timestamp as number) || Date.now(),
                             });
                         }
                     }
@@ -1551,7 +1551,7 @@ export class PiChatView extends ItemView {
 
         // Clear any pending stream content and timers
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1743,7 +1743,7 @@ export class PiChatView extends ItemView {
             // Schedule debounced markdown re-render
             this.pendingStreamContent = msg.content;
             if (!this.streamRenderTimer) {
-                this.streamRenderTimer = activeWindow.setTimeout(() => {
+                this.streamRenderTimer = window.setTimeout(() => {
                     this.streamRenderTimer = null;
                     this.renderStreamingMarkdown();
                 }, 100);
@@ -1819,7 +1819,7 @@ export class PiChatView extends ItemView {
 
         // Cancel any pending debounced render
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;

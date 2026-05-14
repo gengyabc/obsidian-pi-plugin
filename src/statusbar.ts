@@ -54,7 +54,7 @@ export class PiStatusBar {
             const response = await this.plugin.connection.send({
                 type: "get_session_stats",
             });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             if (data) {
                 const tokens = data.tokens as Record<string, unknown> | undefined;
                 this.tokens = (tokens?.total as number) ?? 0;
@@ -76,7 +76,7 @@ export class PiStatusBar {
             const response = await this.plugin.connection.send({
                 type: "get_state",
             });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             if (data) {
                 const model = data.model as Record<string, unknown> | undefined;
                 this.model = (model?.name as string) ?? "";
@@ -99,7 +99,7 @@ export class PiStatusBar {
             const response = await this.plugin.connection.send({
                 type: "get_state",
             });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             if (data) {
                 this.sessionName = (data.sessionName as string) ?? "";
                 this.render();

@@ -13,9 +13,9 @@ let readFileSync: typeof import("fs").readFileSync;
 let join: typeof import("path").join;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js fs module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ readFileSync } = require("fs"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ join } = require("path"));
 }
 

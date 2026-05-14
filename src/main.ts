@@ -136,7 +136,7 @@ export default class PiPlugin extends Plugin {
         // Flush message store (best-effort, silent)
         this.flushMessageStore().catch(() => {});
         if (this.storeFlushTimer) {
-            activeWindow.clearTimeout(this.storeFlushTimer);
+            window.clearTimeout(this.storeFlushTimer);
             this.storeFlushTimer = null;
         }
 
@@ -314,8 +314,8 @@ export default class PiPlugin extends Plugin {
      */
     private async loadMessageStore(): Promise<void> {
         try {
-            const raw = await this.loadData();
-            const storeData = raw?.messageStore as MessageStoreData | undefined;
+            const raw = await this.loadData() as { messageStore?: MessageStoreData } | null;
+            const storeData = raw?.messageStore;
             this.messageStore.load(storeData || null);
         } catch {
             // Non-fatal
@@ -327,7 +327,7 @@ export default class PiPlugin extends Plugin {
      */
     scheduleStoreFlush(): void {
         if (this.storeFlushTimer) return;
-        this.storeFlushTimer = activeWindow.setTimeout(() => {
+        this.storeFlushTimer = window.setTimeout(() => {
             this.storeFlushTimer = null;
             this.flushMessageStore().catch(() => {});
         }, 2000);
@@ -339,7 +339,7 @@ export default class PiPlugin extends Plugin {
     async flushMessageStore(): Promise<void> {
         if (!this.messageStore.isDirty()) return;
         try {
-            const existing = (await this.loadData()) || {};
+            const existing = (await this.loadData() as Record<string, unknown>) || {};
             existing.messageStore = this.messageStore.serialize();
             await this.saveData(existing);
         } catch (err) {
@@ -348,7 +348,7 @@ export default class PiPlugin extends Plugin {
     }
 
     async loadSettings(): Promise<void> {
-        const raw = await this.loadData();
+        const raw = await this.loadData() as Record<string, unknown> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
     }
 
@@ -405,11 +405,11 @@ export default class PiPlugin extends Plugin {
     private async createConnection(apiKeys: Record<string, string>): Promise<void> {
         // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
-        if (!('getBasePath' in adapter) || typeof (adapter as any).getBasePath !== 'function') {
+        if (!('getBasePath' in adapter) || typeof adapter.getBasePath !== 'function') {
             showCriticalNotice(t("notices.mobileUnsupported"));
             throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
-        const vaultRoot = (adapter as any).getBasePath() as string;
+        const vaultRoot = adapter.getBasePath();
         // Default to parent of vault root for broader project context
         const defaultCwd = vaultRoot.includes('/') ? vaultRoot.substring(0, vaultRoot.lastIndexOf('/')) : vaultRoot;
         const cwd = this.settings.workingDirectory || defaultCwd;
@@ -459,7 +459,7 @@ export default class PiPlugin extends Plugin {
             });
 
             // Refresh status bar and register commands once connected
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
                 this.statusBar?.refreshModel();
                 this.statusBar?.refreshStats();
                 void this.registerPiCommands();
@@ -479,7 +479,7 @@ export default class PiPlugin extends Plugin {
         try {
             const conn = await this.ensureConnection();
             const response = await conn.send({ type: "get_available_models" });
-            const data = response.data as Record<string, unknown> | undefined;
+            const data = response.data;
             const models = (data?.models as Array<Record<string, unknown>>) ?? [];
 
             if (models.length === 0) {

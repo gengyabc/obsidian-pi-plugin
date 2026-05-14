@@ -7,9 +7,9 @@ type ChildProcess = import("child_process").ChildProcess;
 type ReadlineInterface = import("readline").Interface;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js child_process module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js child_process module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ spawn } = require("child_process"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js readline module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js readline module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ createInterface } = require("readline"));
 }
 
@@ -105,7 +105,7 @@ export interface RpcErrorEvent extends RpcEvent {
 interface PendingRequest {
     resolve: (value: RpcEvent) => void;
     reject: (reason: Error) => void;
-    timeoutId: ReturnType<typeof activeWindow.setTimeout>;
+    timeoutId: number;
 }
 
 /**
@@ -225,7 +225,7 @@ export class PiConnection {
                 try {
                     const event = JSON.parse(trimmed) as RpcEvent;
                     this.dispatch(event);
-                } catch (_err) {
+                } catch {
                     // Non-JSON output — ignore (Pi may emit debug text)
                     console.warn("[Pi RPC] Non-JSON line from stdout:", trimmed);
                 }
@@ -286,7 +286,7 @@ export class PiConnection {
 
         return new Promise((resolve, reject) => {
             // Create timeout first
-            const timeoutId = activeWindow.setTimeout(() => {
+            const timeoutId = window.setTimeout(() => {
                 if (this.pendingRequests.has(id)) {
                     this.pendingRequests.delete(id);
                     reject(new Error(`Request ${id} timed out after ${this.timeout / 1000}s`));
@@ -297,11 +297,11 @@ export class PiConnection {
             // If response arrives between setting handlers and writing, it will still be handled
             this.pendingRequests.set(id, {
                 resolve: (value) => {
-                    activeWindow.clearTimeout(timeoutId);
+                    window.clearTimeout(timeoutId);
                     resolve(value);
                 },
                 reject: (reason) => {
-                    activeWindow.clearTimeout(timeoutId);
+                    window.clearTimeout(timeoutId);
                     reject(reason);
                 },
                 timeoutId,
@@ -409,8 +409,8 @@ export class PiConnection {
         this.process = null;
 
         // Reject all pending requests
-        for (const [_id, pending] of this.pendingRequests) {
-            activeWindow.clearTimeout(pending.timeoutId);
+        for (const [, pending] of this.pendingRequests) {
+            window.clearTimeout(pending.timeoutId);
             pending.reject(new Error("Pi connection closed"));
         }
         this.pendingRequests.clear();

@@ -164,7 +164,7 @@ export class StreamHandler {
             }
             case 'toolcall_start': {
                 // The model is generating a tool call. Track it by contentIndex.
-                const contentIndex = String(ame.contentIndex ?? '');
+                const contentIndex = typeof ame.contentIndex === "number" ? String(ame.contentIndex) : '';
                 const partial = ame.partial as Record<string, unknown> | undefined;
                 const toolName = (partial?.name as string) ?? '';
                 this.pendingToolCalls.set(contentIndex, { name: toolName, arguments: '' });
@@ -172,7 +172,7 @@ export class StreamHandler {
             }
             case 'toolcall_delta': {
                 // Accumulate tool call arguments
-                const contentIndex = String(ame.contentIndex ?? '');
+                const contentIndex = typeof ame.contentIndex === "number" ? String(ame.contentIndex) : '';
                 const delta = ame.delta as string | undefined;
                 const pending = this.pendingToolCalls.get(contentIndex);
                 if (pending && delta) {
@@ -183,7 +183,7 @@ export class StreamHandler {
             case 'toolcall_end': {
                 // Tool call generation complete. The full toolCall object is in the event.
                 // We don't create a ChatMessage here — that happens at tool_execution_end.
-                const contentIndex = String(ame.contentIndex ?? '');
+                const contentIndex = typeof ame.contentIndex === "number" ? String(ame.contentIndex) : '';
                 const toolCall = ame.toolCall as Record<string, unknown> | undefined;
                 if (toolCall) {
                     const name = (toolCall.name as string) ?? '';

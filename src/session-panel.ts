@@ -76,7 +76,7 @@ export class SessionPanel {
         if (this.visible) {
             this.hide();
         } else {
-            this.show();
+            void this.show();
         }
     }
 
@@ -230,12 +230,12 @@ export class SessionPanel {
         deleteBtn.setText("🗑");
         deleteBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.confirmDelete(session);
+            void this.confirmDelete(session);
         });
     }
 
     private async confirmDelete(session: PiSession): Promise<void> {
-        const confirmed = activeWindow.confirm(t("sessionPanel.confirmDelete", { name: session.name }));
+        const confirmed = window.confirm(t("sessionPanel.confirmDelete", { name: session.name }));
         if (!confirmed) return;
 
         try {

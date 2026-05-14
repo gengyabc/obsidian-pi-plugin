@@ -115,9 +115,9 @@ export class CommandSuggest {
             if (Array.isArray(commands)) {
                 this.cachedCommands = commands
                     .map((cmd) => ({
-                        name: String(cmd.name || ""),
-                        description: String(cmd.description || ""),
-                        source: String(cmd.source || ""),
+                        name: typeof cmd.name === "string" ? cmd.name : "",
+                        description: typeof cmd.description === "string" ? cmd.description : "",
+                        source: typeof cmd.source === "string" ? cmd.source : "",
                     }))
                     .filter((cmd) => cmd.name.length > 0);
                 return this.cachedCommands;

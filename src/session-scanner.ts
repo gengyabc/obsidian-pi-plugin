@@ -25,11 +25,11 @@ let _basename: typeof import("path").basename;
 let _homedir: typeof import("os").homedir;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ readFile: _readFile, readdir: _readdir, stat: _stat } = require("fs/promises"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ join: _join, basename: _basename } = require("path"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js os module only available on desktop, guarded by Platform.isDesktop (Rule 36)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js os module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ homedir: _homedir } = require("os"));
 }
 
@@ -130,7 +130,16 @@ export class SessionScanner {
 
         for (const line of lines) {
             try {
-                const entry = JSON.parse(line);
+                const entry = JSON.parse(line) as {
+                    type: string;
+                    cwd?: string;
+                    id?: string;
+                    name?: string;
+                    message?: {
+                        role?: string;
+                        content?: unknown;
+                    };
+                };
 
                 // Session header — first line
                 if (entry.type === "session") {
