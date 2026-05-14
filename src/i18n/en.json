@@ -1,5 +1,5 @@
 {
-  "settings.title": "General",
+  "settings.title": "Pi settings",
   "settings.piPath.name": "Pi binary path",
   "settings.piPath.desc": "Full path to the pi executable. Default: pi (uses PATH)",
   "settings.piPath.placeholder": "pi",

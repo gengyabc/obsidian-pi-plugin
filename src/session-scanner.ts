@@ -14,9 +14,24 @@
  *   /home/user/Projects → --home-user-Projects--
  */
 
-import { readFile, readdir, stat } from "fs/promises";
-import { join, basename } from "path";
-import { homedir } from "os";
+// Guard Node.js imports for desktop-only (Rule 36)
+import { Platform } from "obsidian";
+
+let _readFile: typeof import("fs/promises").readFile;
+let _readdir: typeof import("fs/promises").readdir;
+let _stat: typeof import("fs/promises").stat;
+let _join: typeof import("path").join;
+let _basename: typeof import("path").basename;
+let _homedir: typeof import("os").homedir;
+
+if (Platform.isDesktop) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ({ readFile: _readFile, readdir: _readdir, stat: _stat } = require("fs/promises"));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ({ join: _join, basename: _basename } = require("path"));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ({ homedir: _homedir } = require("os"));
+}
 
 export interface PiSession {
     /** Full path to the .jsonl file */
@@ -37,7 +52,7 @@ export class SessionScanner {
     private sessionsDir: string;
 
     constructor(sessionsDir?: string) {
-        this.sessionsDir = sessionsDir || join(homedir(), ".pi", "agent", "sessions");
+        this.sessionsDir = sessionsDir || (Platform.isDesktop ? _join(_homedir(), ".pi", "agent", "sessions") : "");
     }
 
     /**
@@ -49,16 +64,16 @@ export class SessionScanner {
 
         let cwdDirs: string[];
         try {
-            cwdDirs = await readdir(this.sessionsDir);
+            cwdDirs = await _readdir(this.sessionsDir);
         } catch {
             // Directory doesn't exist — no sessions
             return [];
         }
 
         for (const cwdSlug of cwdDirs) {
-            const cwdPath = join(this.sessionsDir, cwdSlug);
+            const cwdPath = _join(this.sessionsDir, cwdSlug);
             try {
-                const cwdStat = await stat(cwdPath);
+                const cwdStat = await _stat(cwdPath);
                 if (!cwdStat.isDirectory()) continue;
             } catch {
                 continue;
@@ -66,14 +81,14 @@ export class SessionScanner {
 
             let files: string[];
             try {
-                files = await readdir(cwdPath);
+                files = await _readdir(cwdPath);
             } catch {
                 continue;
             }
 
             for (const file of files) {
                 if (!file.endsWith(".jsonl")) continue;
-                const filePath = join(cwdPath, file);
+                const filePath = _join(cwdPath, file);
                 try {
                     const session = await this.readSessionMetadata(filePath, cwdSlug);
                     if (session) sessions.push(session);
@@ -92,15 +107,15 @@ export class SessionScanner {
      * Read metadata from a single .jsonl session file.
      */
     private async readSessionMetadata(filePath: string, cwdSlug: string): Promise<PiSession | null> {
-        const fileStat = await stat(filePath);
+        const fileStat = await _stat(filePath);
         if (fileStat.size === 0) return null;
 
-        const content = await readFile(filePath, "utf-8");
+        const content = await _readFile(filePath, "utf-8");
         const lines = content.split("\n").filter((l) => l.trim());
 
         if (lines.length === 0) return null;
 
-        let name = basename(filePath, ".jsonl");
+        let name = _basename(filePath, ".jsonl");
         let preview = "";
         let cwd = this.unslugCwd(cwdSlug);
         let messageCount = 0;
@@ -149,7 +164,7 @@ export class SessionScanner {
             name = sessionName;
         } else {
             // Filename format: 2026-03-03T10-44-51-584Z_uuid.jsonl
-            const dateMatch = basename(filePath).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})/);
+            const dateMatch = _basename(filePath).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})/);
             if (dateMatch) {
                 name = `${dateMatch[1]} ${dateMatch[2]}:${dateMatch[3]}`;
             }

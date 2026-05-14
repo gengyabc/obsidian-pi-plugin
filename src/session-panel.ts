@@ -51,11 +51,17 @@ export class SessionPanel {
         });
         closeBtn.setText("×");
         closeBtn.addEventListener("click", () => this.hide());
+        closeBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.hide();
+            }
+        });
 
         // Search input
         this.searchEl = this.containerEl.createEl("input", {
             cls: "pi-session-panel-search",
-            attr: { type: "text", placeholder: t("sessionPanel.filterPlaceholder") },
+            attr: { type: "text", placeholder: t("sessionPanel.filterPlaceholder"), "aria-label": t("sessionPanel.filterPlaceholder") },
         });
         this.searchEl.addEventListener("input", () => this.renderList());
 
@@ -170,8 +176,14 @@ export class SessionPanel {
         });
 
         // Main content area — clickable to switch
-        const content = entry.createDiv({ cls: "pi-session-entry-content" });
+        const content = entry.createDiv({ cls: "pi-session-entry-content", attr: { tabindex: "0" } });
         content.addEventListener("click", () => this.callbacks.onSwitch(session));
+        content.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this.callbacks.onSwitch(session);
+            }
+        });
 
         // Name
         content.createDiv({
@@ -223,14 +235,7 @@ export class SessionPanel {
     }
 
     private async confirmDelete(session: PiSession): Promise<void> {
-        // Simple confirmation via a second click — first click changes button
-        // to "Sure?" text, second click actually deletes.
-        const entry = this.listEl.querySelector(
-            `.pi-session-entry-name[innerText="${session.name}"]`,
-        )?.closest(".pi-session-entry");
-
-        // Use Notice for confirmation since we can't easily do inline confirm
-        const confirmed = confirm(t("sessionPanel.confirmDelete", { name: session.name }));
+        const confirmed = activeWindow.confirm(t("sessionPanel.confirmDelete", { name: session.name }));
         if (!confirmed) return;
 
         try {

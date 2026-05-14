@@ -55,7 +55,7 @@ export default class PiPlugin extends Plugin {
     /** IDs of dynamically registered Pi commands (for cleanup on re-registration) */
     private dynamicCommandIds: string[] = [];
     /** Debounce timer for message store persistence */
-    private storeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+    private storeFlushTimer: number | null = null;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -326,7 +326,7 @@ export default class PiPlugin extends Plugin {
      */
     scheduleStoreFlush(): void {
         if (this.storeFlushTimer) return;
-        this.storeFlushTimer = setTimeout(() => {
+        this.storeFlushTimer = activeWindow.setTimeout(() => {
             this.storeFlushTimer = null;
             this.flushMessageStore();
         }, 2000);

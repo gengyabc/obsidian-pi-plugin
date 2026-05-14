@@ -24,21 +24,21 @@ const locales: Record<string, Record<string, string>> = {
 };
 
 /**
- * Detect Obsidian's language setting from moment.js locale.
+ * Detect Obsidian's language setting via moment.js locale.
+ * moment is bundled by Obsidian and reflects the user's language preference.
+ * Falls back to 'en' only when moment is unavailable (e.g. test environments).
+ * Rule 28: Avoid localStorage.getItem('language') — use Obsidian's APIs.
  */
 function getLang(): string {
-    // Handle test environment where moment or localStorage doesn't exist
     if (typeof window === 'undefined') {
         return 'en';
     }
-    // Try moment.js locale first (Obsidian bundles moment)
-    const activeWindow = window;
-    const momentLang = (activeWindow as unknown as Record<string, unknown>).moment
-        ? ((activeWindow as unknown as Record<string, unknown>).moment as { locale?: () => string })?.locale?.()
-        : undefined;
-    const lang = momentLang ?? activeWindow.localStorage.getItem('language') ?? 'en';
-    const normalized = String(lang).toLowerCase();
-    if (normalized.startsWith('zh')) return 'zh';
+    const w = window as unknown as Record<string, unknown>;
+    const moment = w.moment as { locale?: () => string } | undefined;
+    if (typeof moment?.locale === 'function') {
+        const locale = moment.locale();
+        if (typeof locale === 'string' && locale.toLowerCase().startsWith('zh')) return 'zh';
+    }
     return 'en';
 }
 

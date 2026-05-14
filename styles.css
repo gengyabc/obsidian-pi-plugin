@@ -112,6 +112,11 @@
     color: var(--text-normal);
 }
 
+.pi-header-new-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+}
+
 /* ── Chat Body (panel + messages) ── */
 .pi-chat-body {
     display: flex;
@@ -157,6 +162,12 @@
 
 .pi-session-panel-close:hover {
     color: var(--text-normal);
+}
+
+.pi-session-panel-close:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
 }
 
 .pi-session-panel-search {
@@ -269,6 +280,11 @@
     background: var(--background-modifier-hover);
 }
 
+.pi-session-action-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+}
+
 .pi-session-action-delete:hover {
     background: var(--background-modifier-error-hover);
 }
@@ -287,6 +303,11 @@
 .pi-header-sessions-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
+}
+
+.pi-header-sessions-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
 }
 
 .pi-messages {
@@ -478,6 +499,11 @@
 .pi-abort-btn:hover {
     background: var(--color-red);
     filter: brightness(0.85);
+}
+
+.pi-abort-btn:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
 }
 
 /* ── Attachment chips ── */
@@ -699,6 +725,11 @@
 
 .pi-return-latest-btn:hover {
     filter: brightness(0.9);
+}
+
+.pi-return-latest-btn:focus-visible {
+    outline: 2px solid var(--text-normal);
+    outline-offset: 2px;
 }
 
 /* ── Thinking indicator (waiting for Pi) ── */

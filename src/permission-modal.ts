@@ -215,6 +215,7 @@ export class PermissionInputModal extends Modal {
                 type: "text",
                 placeholder: this.placeholder,
                 value: this.initialValue,
+                "aria-label": this.title,
             },
         });
         inputEl.addEventListener("input", () => {

@@ -13,7 +13,6 @@ import { SessionManager } from "./sessions";
 import { SessionPanel } from "./session-panel";
 import type { PiSession } from "./session-scanner";
 import { PermissionSelectModal, PermissionConfirmModal, PermissionInputModal } from "./permission-modal";
-import { unlink } from "fs/promises";
 
 // --- Rewind/Return Types ---
 interface PiStateData {
@@ -97,7 +96,7 @@ export class PiChatView extends ItemView {
     private streamingComponent: Component | null = null;
 
     /** Debounce timer for live markdown re-rendering during streaming */
-    private streamRenderTimer: ReturnType<typeof setTimeout> | null = null;
+    private streamRenderTimer: number | null = null;
 
     /** Latest streamed content waiting to be rendered */
     private pendingStreamContent: string | null = null;
@@ -167,9 +166,12 @@ export class PiChatView extends ItemView {
 
         // Add abort button to the input area (hidden by default)
         this.abortBtn = this.chatInput.getInputAreaEl().createEl("button", {
-            cls: "pi-abort-btn",
+            cls: "pi-abort-btn is-hidden",
             text: t("view.abort"),
-            attr: { style: "display: none;" },
+            attr: {
+                type: "button",
+                "aria-label": t("view.abort"),
+            },
         });
         this.abortBtn.addEventListener("click", () => this.abortStream());
 
@@ -298,7 +300,7 @@ export class PiChatView extends ItemView {
             this.streamHandler.handleEvent(event);
             if ((event.type as string) === "agent_end") {
                 this.refreshHeader();
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     this.updateCurrentSessionFromPi()
                         .then(() => this.syncForkEntryIds())
                         .catch((err) =>
@@ -312,7 +314,7 @@ export class PiChatView extends ItemView {
         this.commandSuggest.setConnection(conn);
 
         // Initial header refresh + restore last session after connection
-        setTimeout(() => {
+        activeWindow.setTimeout(() => {
             this.refreshHeader();
             this.restoreSession();
         }, 1000);
@@ -462,7 +464,7 @@ export class PiChatView extends ItemView {
 
         const input = this.headerSessionName.createEl("input", {
             cls: "pi-header-name-input",
-            attr: { type: "text", value: currentName },
+            attr: { type: "text", value: currentName, "aria-label": t("view.sessionName.tooltip") },
         });
         input.focus();
         input.select();
@@ -744,6 +746,7 @@ export class PiChatView extends ItemView {
      * Delete a Pi session file.
      */
     private async deleteSession(session: PiSession): Promise<void> {
+        const { unlink } = await import("fs/promises");
         await unlink(session.path);
     }
 
@@ -1344,6 +1347,7 @@ export class PiChatView extends ItemView {
             text: t("view.returnBanner.button"),
             attr: {
                 type: "button",
+                "aria-label": t("view.returnBanner.tooltip"),
                 title: t("view.returnBanner.tooltip"),
             },
         });
@@ -1728,7 +1732,7 @@ export class PiChatView extends ItemView {
             // Schedule debounced markdown re-render
             this.pendingStreamContent = msg.content;
             if (!this.streamRenderTimer) {
-                this.streamRenderTimer = setTimeout(() => {
+                this.streamRenderTimer = activeWindow.setTimeout(() => {
                     this.streamRenderTimer = null;
                     this.renderStreamingMarkdown();
                 }, 100);
