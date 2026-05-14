@@ -118,7 +118,7 @@ export class PiSettingTab extends PluginSettingTab {
         this.createProviderModelSettings(containerEl);
 
         // API keys section - uses SecretStorage
-        this.createApiKeySettings(containerEl);
+        void this.createApiKeySettings(containerEl);
 
         // Platform-specific help sections
         if (Platform.isDesktop) {
@@ -310,7 +310,7 @@ export class PiSettingTab extends PluginSettingTab {
                             text.setPlaceholder(t("settings.apiKeys.keyStored"));
                             new Notice(t("notices.keyStored", { envVar }));
                             // Reconnect to pick up the new key (async, no await needed)
-                            this.plugin.reconnectAfterKeyChange();
+                            void this.plugin.reconnectAfterKeyChange();
                             // Refresh to update status
                             this.display();
                         }

@@ -61,7 +61,6 @@ export function t(key: string, vars?: Record<string, string | number>): string {
     let str = Object.prototype.hasOwnProperty.call(locale, key) ? locale[key] : locales.en[key];
 
     if (str === undefined) {
-        // eslint-disable-next-line no-console
         console.warn(`[i18n] Missing translation key: ${key}`);
         str = key;
     }

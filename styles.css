@@ -461,6 +461,7 @@
     flex: 1;
     resize: none;
     min-height: 36px;
+    height: var(--pi-input-height, 36px);
     max-height: 200px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 6px;

@@ -15,6 +15,13 @@ import { SessionPanel } from "./session-panel";
 import type { PiSession } from "./session-scanner";
 import { PermissionSelectModal, PermissionConfirmModal, PermissionInputModal } from "./permission-modal";
 
+/** Content block from Pi's message content array */
+interface ContentBlock {
+    type: string;
+    text?: string;
+    thinking?: string;
+}
+
 // --- Rewind/Return Types ---
 interface PiStateData {
     sessionFile?: string;
@@ -186,7 +193,7 @@ export class PiChatView extends ItemView {
         });
 
         // Wire up RPC event stream so responses are rendered
-        this.connectToRpc();
+        void this.connectToRpc();
     }
 
     async onClose(): Promise<void> {
@@ -204,7 +211,7 @@ export class PiChatView extends ItemView {
         this.streamHandler.reset();
         this.removeThinkingIndicator();
         if (this.streamRenderTimer) {
-            clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -317,7 +324,7 @@ export class PiChatView extends ItemView {
         // Initial header refresh + restore last session after connection
         activeWindow.setTimeout(() => {
             this.refreshHeader();
-            this.restoreSession();
+            void this.restoreSession();
         }, 1000);
     }
 
@@ -568,13 +575,13 @@ export class PiChatView extends ItemView {
             if (!Array.isArray(content)) return null;
 
             const text = content
-                .filter((b: any) => b.type === "text" && b.text)
-                .map((b: any) => b.text)
+                .filter((b: ContentBlock) => b.type === "text" && b.text)
+                .map((b: ContentBlock) => b.text)
                 .join("\n");
 
             const thinking = content
-                .filter((b: any) => b.type === "thinking" && b.thinking)
-                .map((b: any) => b.thinking)
+                .filter((b: ContentBlock) => b.type === "thinking" && b.thinking)
+                .map((b: ContentBlock) => b.thinking)
                 .join("\n\n");
 
             if (!text && !thinking) return null;
@@ -673,8 +680,8 @@ export class PiChatView extends ItemView {
         // Reset header
         if (this.headerSessionName) this.headerSessionName.setText(t("view.newSession"));
         this.sessionPanel?.setCurrentSession(this.currentSessionPath);
-        this.plugin.statusBar?.refreshModel();
-        this.refreshHeader();
+        void this.plugin.statusBar?.refreshModel();
+        void this.refreshHeader();
         new Notice(t("notices.newSession"));
     }
 
@@ -736,11 +743,11 @@ export class PiChatView extends ItemView {
         this.sessionPanel?.hide();
 
         // Update status bar
-        this.plugin.statusBar?.refreshModel();
-        this.plugin.statusBar?.refreshStats();
+        void this.plugin.statusBar?.refreshModel();
+        void this.plugin.statusBar?.refreshStats();
 
         new Notice(t("notices.switchedTo", { name: session.name }));
-        this.refreshHeader();
+        void this.refreshHeader();
     }
 
     /**
@@ -833,8 +840,8 @@ export class PiChatView extends ItemView {
         if (typeof content === "string") return content;
         if (Array.isArray(content)) {
             return content
-                .filter((b: any) => b.type === "text" && b.text)
-                .map((b: any) => b.text)
+                .filter((b: ContentBlock) => b.type === "text" && b.text)
+                .map((b: ContentBlock) => b.text)
                 .join("\n");
         }
         return "";
@@ -1338,7 +1345,7 @@ export class PiChatView extends ItemView {
             this.contentEl.insertBefore(this.returnBannerEl, this.chatBodyEl);
         }
 
-        const label = this.returnBannerEl.createSpan({
+        this.returnBannerEl.createSpan({
             cls: "pi-return-banner-text",
             text: t("view.returnBanner.text"),
         });
@@ -1356,7 +1363,7 @@ export class PiChatView extends ItemView {
         btn.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            this.returnToLatest();
+            void this.returnToLatest();
         });
     }
 
@@ -1481,8 +1488,6 @@ export class PiChatView extends ItemView {
                 this.plugin.settings,
                 this.app.vault,
             );
-            if (path) {
-            }
             return path;
         } catch (err) {
             console.error("[Pi Chat] Failed to auto-save session:", err);
@@ -1546,7 +1551,7 @@ export class PiChatView extends ItemView {
 
         // Clear any pending stream content and timers
         if (this.streamRenderTimer) {
-            clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1657,7 +1662,7 @@ export class PiChatView extends ItemView {
             // Fire-and-forget abort - connection should already exist
             const conn = this.plugin.connection;
             if (conn) {
-                conn.send({ type: "abort" });
+                void conn.send({ type: "abort" });
             }
         } catch (err) {
             console.warn("[Pi Chat] Failed to send abort:", err);
@@ -1788,18 +1793,16 @@ export class PiChatView extends ItemView {
         );
 
         contentEl.empty();
-        try {
-            MarkdownRenderer.render(
-                this.app,
-                safeContent,
-                contentEl as HTMLElement,
-                "",
-                this.streamingComponent,
-            );
-        } catch (err) {
+        MarkdownRenderer.render(
+            this.app,
+            safeContent,
+            contentEl as HTMLElement,
+            "",
+            this.streamingComponent,
+        ).catch((err) => {
             console.error("[Pi Chat] Streaming markdown render error:", err);
-            (contentEl as HTMLElement).setText(this.pendingStreamContent);
-        }
+            (contentEl as HTMLElement).setText(this.pendingStreamContent ?? "");
+        });
 
         this.scrollToBottom();
     }
@@ -1816,7 +1819,7 @@ export class PiChatView extends ItemView {
 
         // Cancel any pending debounced render
         if (this.streamRenderTimer) {
-            clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1835,18 +1838,16 @@ export class PiChatView extends ItemView {
                 if (msg.content) {
                     this.streamingComponent = new Component();
                     this.streamingComponent.load();
-                    try {
-                        MarkdownRenderer.render(
-                            this.app,
-                            msg.content,
-                            contentEl as HTMLElement,
-                            "",
-                            this.streamingComponent,
-                        );
-                    } catch (err) {
+                    MarkdownRenderer.render(
+                        this.app,
+                        msg.content,
+                        contentEl as HTMLElement,
+                        "",
+                        this.streamingComponent,
+                    ).catch((err) => {
                         console.error("[Pi Chat] Markdown rendering error:", err);
                         (contentEl as HTMLElement).setText(msg.content);
-                    }
+                    });
                 }
             }
 
@@ -1864,18 +1865,16 @@ export class PiChatView extends ItemView {
                 const thinkingEl = createEl("details", { cls: "pi-thinking" });
                 thinkingEl.createEl("summary", { text: t("renderer.thinkingSummary") });
                 const thinkingContentEl = thinkingEl.createDiv({ cls: "pi-thinking-content" });
-                try {
-                    MarkdownRenderer.render(
-                        this.app,
-                        msg.thinkingContent,
-                        thinkingContentEl,
-                        "",
-                        this.streamingComponent,
-                    );
-                } catch (err) {
+                MarkdownRenderer.render(
+                    this.app,
+                    msg.thinkingContent,
+                    thinkingContentEl,
+                    "",
+                    this.streamingComponent,
+                ).catch((err) => {
                     console.error("[Pi Chat] Thinking render error:", err);
-                    thinkingContentEl.setText(msg.thinkingContent);
-                }
+                    thinkingContentEl.setText(msg.thinkingContent ?? "");
+                });
                 // Insert before the content div so thinking appears above the response
                 this.streamingMessageEl.insertBefore(thinkingEl, contentEl);
             }
@@ -1904,7 +1903,7 @@ export class PiChatView extends ItemView {
                         msg.isSteering,
                         {
                             onRewind: canShowRewind
-                                ? () => this.rewindToMessage(msg)
+                                ? () => { void this.rewindToMessage(msg); }
                                 : undefined,
                             rewindDisabled: this.streaming || this.rewindBusy,
                             rewindTitle: msg.piEntryId

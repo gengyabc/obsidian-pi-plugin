@@ -11,16 +11,7 @@
  */
 
 import { ChatMessage, generateMessageId } from "./message-types";
-import type {
-    RpcEvent,
-    MessageStartEvent,
-    MessageUpdateEvent,
-    MessageEndEvent,
-    ToolExecutionStartEvent,
-    ToolExecutionUpdateEvent,
-    ToolExecutionEndEvent,
-    AgentEndEvent,
-} from "./rpc";
+import type { RpcEvent } from "./rpc";
 
 export interface StreamCallbacks {
     onMessageUpdate: (msg: ChatMessage) => void;
@@ -72,7 +63,7 @@ export class StreamHandler {
                 this.handleToolExecutionEnd(event);
                 break;
             case 'agent_end':
-                this.handleAgentEnd(event);
+                // Handled by view for session sync
                 break;
             case 'auto_compaction_end':
                 if (this.callbacks.onCompaction) {
@@ -303,15 +294,6 @@ export class StreamHandler {
 
         if (this.callbacks.onToolExecutionUpdate) {
             this.callbacks.onToolExecutionUpdate(toolCallId, toolName, resultText);
-        }
-    }
-
-    /**
-     * Handle agent_end events which may contain entry IDs for fork support.
-     */
-    private handleAgentEnd(event: RpcEvent): void {
-        const messages = event.messages as Array<Record<string, unknown>> | undefined;
-        if (Array.isArray(messages)) {
         }
     }
 

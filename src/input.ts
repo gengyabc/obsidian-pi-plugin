@@ -179,7 +179,7 @@ export class ChatInput {
         // Trigger slash command suggest when `/` typed as first char
         if (e.key === "/" && this.callbacks.onSlashTyped) {
             // Check after the character is inserted (keydown fires before insertion)
-            setTimeout(() => {
+            activeWindow.setTimeout(() => {
                 if (this.textareaEl.value.startsWith("/")) {
                     this.callbacks.onSlashTyped!();
                 }
@@ -188,7 +188,7 @@ export class ChatInput {
 
         // Trigger @ file picker when `@` typed
         if (e.key === "@" && this.callbacks.onAtTyped) {
-            setTimeout(() => this.callbacks.onAtTyped!(), 0);
+            activeWindow.setTimeout(() => this.callbacks.onAtTyped!(), 0);
         }
     }
 
@@ -205,8 +205,10 @@ export class ChatInput {
 
     private autoResize(): void {
         const el = this.textareaEl;
-        el.style.height = "auto";
-        el.style.height = Math.min(el.scrollHeight, 200) + "px";
+        // Reset height to get accurate scrollHeight measurement
+        el.style.setProperty('--pi-input-height', 'auto');
+        const computedHeight = Math.min(el.scrollHeight, 200);
+        el.style.setProperty('--pi-input-height', `${computedHeight}px`);
     }
 
     private handlePaste(e: ClipboardEvent): void {

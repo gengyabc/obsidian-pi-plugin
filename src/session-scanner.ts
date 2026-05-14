@@ -25,11 +25,11 @@ let _basename: typeof import("path").basename;
 let _homedir: typeof import("os").homedir;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ readFile: _readFile, readdir: _readdir, stat: _stat } = require("fs/promises"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ join: _join, basename: _basename } = require("path"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- Node.js os module only available on desktop, guarded by Platform.isDesktop (Rule 36)
     ({ homedir: _homedir } = require("os"));
 }
 
@@ -46,6 +46,13 @@ export interface PiSession {
     messageCount: number;
     /** First user message as preview text */
     preview: string;
+}
+
+/** Content block from Pi's message content array */
+interface ContentBlock {
+    type: string;
+    text?: string;
+    thinking?: string;
 }
 
 export class SessionScanner {
@@ -188,8 +195,8 @@ export class SessionScanner {
         if (typeof content === "string") return content;
         if (Array.isArray(content)) {
             return content
-                .filter((b: any) => b.type === "text" && b.text)
-                .map((b: any) => b.text)
+                .filter((b: ContentBlock) => b.type === "text" && b.text)
+                .map((b: ContentBlock) => b.text)
                 .join(" ");
         }
         return "";

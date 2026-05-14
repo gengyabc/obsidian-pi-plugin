@@ -177,11 +177,11 @@ export class SessionPanel {
 
         // Main content area — clickable to switch
         const content = entry.createDiv({ cls: "pi-session-entry-content", attr: { tabindex: "0" } });
-        content.addEventListener("click", () => this.callbacks.onSwitch(session));
+        content.addEventListener("click", () => { void this.callbacks.onSwitch(session); });
         content.addEventListener("keydown", (e) => {
             if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                this.callbacks.onSwitch(session);
+                void this.callbacks.onSwitch(session);
             }
         });
 
@@ -220,7 +220,7 @@ export class SessionPanel {
         exportBtn.setText("📄");
         exportBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.callbacks.onExport(session);
+            void this.callbacks.onExport(session);
         });
 
         const deleteBtn = actions.createEl("button", {

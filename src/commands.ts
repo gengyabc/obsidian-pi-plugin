@@ -42,7 +42,7 @@ class CommandSuggestModal extends FuzzySuggestModal<PiCommand> {
         this.onSelect(item);
     }
 
-    renderSuggestion(item: { item: PiCommand; match: { score: number; matches: any[] } }, el: HTMLElement): void {
+    renderSuggestion(item: { item: PiCommand; match: { score: number; matches: Array<[number, number]> } }, el: HTMLElement): void {
         const wrapper = el.createDiv({ cls: "pi-command-suggest-item" });
         const header = wrapper.createDiv({ cls: "pi-command-header" });
         header.createSpan({ text: `/${item.item.name}`, cls: "pi-command-name" });

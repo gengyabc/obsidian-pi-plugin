@@ -47,7 +47,7 @@ export class SessionListModal extends FuzzySuggestModal<SessionEntry> {
     }
 
     renderSuggestion(
-        item: { item: SessionEntry; match: { score: number; matches: any[] } },
+        item: { item: SessionEntry; match: { score: number; matches: Array<[number, number]> } },
         el: HTMLElement,
     ): void {
         const wrapper = el.createDiv({ cls: "pi-session-suggest-item" });

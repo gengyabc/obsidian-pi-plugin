@@ -76,46 +76,46 @@ export default class PiPlugin extends Plugin {
 
         // Ribbon icon to open chat
         this.addRibbonIcon("message-circle", "Open Pi chat", () => {
-            this.activateView();
+            void this.activateView();
         });
 
         // Command: open chat view
         this.addCommand({
             id: "pi-open-chat",
             name: t("commands.openChat"),
-            callback: () => this.activateView(),
+            callback: () => { void this.activateView(); },
         });
 
         this.addCommand({
             id: "pi-send-prompt",
             name: t("commands.sendPrompt"),
-            callback: () => this.sendTestPrompt(),
+            callback: () => { void this.sendTestPrompt(); },
         });
 
         // Session management commands
         this.addCommand({
             id: "pi-save-session",
             name: t("commands.saveSession"),
-            callback: () => this.saveCurrentSession(),
+            callback: () => { void this.saveCurrentSession(); },
         });
 
         this.addCommand({
             id: "pi-browse-sessions",
             name: t("commands.browseSessions"),
-            callback: () => this.browseSessions(),
+            callback: () => { void this.browseSessions(); },
         });
 
         this.addCommand({
             id: "pi-new-session",
             name: t("commands.newSession"),
-            callback: () => this.newSession(),
+            callback: () => { void this.newSession(); },
         });
 
         // Model switcher
         this.addCommand({
             id: "pi-switch-model",
             name: t("commands.switchModel"),
-            callback: () => this.switchModel(),
+            callback: () => { void this.switchModel(); },
         });
 
         // Status bar
@@ -123,24 +123,20 @@ export default class PiPlugin extends Plugin {
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
         // Check for missing API keys (async - don't block onload)
-        this.checkMissingApiKeys();
+        void this.checkMissingApiKeys();
     }
 
-    async onunload(): Promise<void> {
-        // Auto-save conversation before unloading
+    onunload(): void {
+        // Auto-save conversation before unloading (best-effort, silent)
         const view = this.getActiveView();
         if (view && view.hasMessages()) {
-            try {
-                await view.autoSave();
-            } catch {
-                // Non-fatal: auto-save best effort on unload
-            }
+            view.autoSave().catch(() => {});
         }
 
-        // Flush message store
-        await this.flushMessageStore();
+        // Flush message store (best-effort, silent)
+        this.flushMessageStore().catch(() => {});
         if (this.storeFlushTimer) {
-            clearTimeout(this.storeFlushTimer);
+            activeWindow.clearTimeout(this.storeFlushTimer);
             this.storeFlushTimer = null;
         }
 
@@ -296,7 +292,7 @@ export default class PiPlugin extends Plugin {
                     id,
                     name: t("commands.piPrefix", { name: cmd.name, desc: cmd.description ? ` — ${cmd.description}` : "" }),
                     callback: () => {
-                        this.sendPiCommand(cmd.name);
+                        void this.sendPiCommand(cmd.name);
                     },
                 });
             }
@@ -333,7 +329,7 @@ export default class PiPlugin extends Plugin {
         if (this.storeFlushTimer) return;
         this.storeFlushTimer = activeWindow.setTimeout(() => {
             this.storeFlushTimer = null;
-            this.flushMessageStore();
+            this.flushMessageStore().catch(() => {});
         }, 2000);
     }
 
@@ -442,7 +438,7 @@ export default class PiPlugin extends Plugin {
 
             // Set up event handlers
             this.connection.onEvent((event) => {
-                const type = event.type as string;
+                const type = event.type;
                 if (type === "agent_start") {
                     this.statusBar?.setStreaming(true);
                 } else if (type === "agent_end") {
@@ -463,10 +459,10 @@ export default class PiPlugin extends Plugin {
             });
 
             // Refresh status bar and register commands once connected
-            activeWindow?.setTimeout(() => {
+            activeWindow.setTimeout(() => {
                 this.statusBar?.refreshModel();
                 this.statusBar?.refreshStats();
-                this.registerPiCommands();
+                void this.registerPiCommands();
             }, 1000);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

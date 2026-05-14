@@ -50,25 +50,21 @@ export class MessageRenderer {
             const thinkingEl = wrapper.createEl("details", { cls: "pi-thinking" });
             thinkingEl.createEl("summary", { text: t("renderer.thinkingSummary") });
             const thinkingContentEl = thinkingEl.createDiv({ cls: "pi-thinking-content" });
-            try {
-                MarkdownRenderer.render(this.app, thinkingContent, thinkingContentEl, sourcePath, component);
-            } catch (err) {
+            MarkdownRenderer.render(this.app, thinkingContent, thinkingContentEl, sourcePath, component).catch((err) => {
                 console.error("[Pi Chat] Thinking render error:", err);
                 thinkingContentEl.setText(thinkingContent);
                 this.showRenderError();
-            }
+            });
         }
 
         const contentEl = wrapper.createDiv({ cls: "pi-message-content" });
 
         if (markdown) {
-            try {
-                MarkdownRenderer.render(this.app, markdown, contentEl, sourcePath, component);
-            } catch (err) {
+            MarkdownRenderer.render(this.app, markdown, contentEl, sourcePath, component).catch((err) => {
                 console.error("[Pi Chat] Markdown rendering error:", err);
                 contentEl.setText(markdown);
                 this.showRenderError();
-            }
+            });
         }
 
         return wrapper;
@@ -154,20 +150,18 @@ export class MessageRenderer {
 
             // If result looks like it contains code or markdown, render it
             if (this.looksLikeMarkdown(result)) {
-                try {
-                    MarkdownRenderer.render(
-                        this.app,
-                        result,
-                        resultContent,
-                        "",
-                        component,
-                    );
-                } catch (err) {
+                MarkdownRenderer.render(
+                    this.app,
+                    result,
+                    resultContent,
+                    "",
+                    component,
+                ).catch((err) => {
                     console.error("[Pi Chat] Tool result render error:", err);
                     const pre = resultContent.createEl("pre");
                     pre.createEl("code", { text: result });
                     this.showRenderError();
-                }
+                });
             } else {
                 const pre = resultContent.createEl("pre");
                 pre.createEl("code", { text: result });
@@ -216,6 +210,6 @@ export class MessageRenderer {
      * Falls back to code block rendering for plain text.
      */
     private looksLikeMarkdown(text: string): boolean {
-        return /```|^#{1,6}\s|^\s*[-*]\s|\[.*\]\(|\!\[|> |^\|.*\|/m.test(text);
+        return /```|^#{1,6}\s|^\s*[-*]\s|\[.*\]\(|!\[|> |^\|.*\|/m.test(text);
     }
 }
