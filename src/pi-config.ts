@@ -9,14 +9,16 @@
 import { Platform } from "obsidian";
 
 // Guard Node.js imports for desktop-only (Rule 36)
-let readFileSync: typeof import("fs").readFileSync;
-let join: typeof import("path").join;
+let readFileSync: (path: string, encoding: "utf-8") => string;
+let join: (...paths: string[]) => string;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ readFileSync } = require("fs"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ join } = require("path"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop, guarded by Platform.isDesktop
+    const fsModule = require("fs") as typeof import("fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop
+    const pathModule = require("path") as typeof import("path");
+    readFileSync = (...args) => fsModule.readFileSync(...args);
+    join = (...args) => pathModule.join(...args);
 }
 
 interface PiProviderConfig {

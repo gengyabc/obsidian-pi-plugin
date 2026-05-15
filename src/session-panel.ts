@@ -5,7 +5,7 @@
  * with actions to switch, delete, and export. Search/filter supported.
  */
 
-import { Notice } from "obsidian";
+import { App, Modal, Notice, Setting } from "obsidian";
 import { SessionScanner } from "./session-scanner";
 import type { PiSession } from "./session-scanner";
 import { t } from "./i18n/index";
@@ -26,6 +26,7 @@ export class SessionPanel {
     private searchEl: HTMLInputElement;
     private scanner: SessionScanner;
     private callbacks: SessionPanelCallbacks;
+    private app: App;
     private sessions: PiSession[] = [];
     private visible = false;
     private currentSessionPath: string | null = null;
@@ -33,9 +34,11 @@ export class SessionPanel {
     constructor(
         parentEl: HTMLElement,
         callbacks: SessionPanelCallbacks,
+        app: App,
         sessionsDir?: string,
     ) {
         this.callbacks = callbacks;
+        this.app = app;
         this.scanner = new SessionScanner(sessionsDir);
 
         // Panel container — hidden by default
@@ -235,7 +238,26 @@ export class SessionPanel {
     }
 
     private async confirmDelete(session: PiSession): Promise<void> {
-        const confirmed = window.confirm(t("sessionPanel.confirmDelete", { name: session.name }));
+        const confirmed = await new Promise<boolean>((resolve) => {
+            const modal = new Modal(this.app);
+            modal.titleEl.setText(t("sessionPanel.confirmDelete", { name: session.name }));
+            const content = modal.contentEl.createDiv();
+            content.createEl("p", { text: t("sessionPanel.confirmDeleteDesc", { name: session.name }) ?? "Are you sure you want to delete this session?" });
+            new Setting(content)
+                .addButton((btn) =>
+                    btn
+                        .setButtonText("Cancel")
+                        .onClick(() => { modal.close(); resolve(false); })
+                )
+                .addButton((btn) =>
+                    btn
+                        .setButtonText("Delete")
+                        .setCta()
+                        .onClick(() => { modal.close(); resolve(true); })
+                );
+            modal.open();
+        });
+
         if (!confirmed) return;
 
         try {

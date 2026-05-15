@@ -7,10 +7,12 @@ type ChildProcess = import("child_process").ChildProcess;
 type ReadlineInterface = import("readline").Interface;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js child_process module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ spawn } = require("child_process"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js readline module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ createInterface } = require("readline"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js child_process module only available on desktop, guarded by Platform.isDesktop
+    const childProcessModule = require("child_process") as typeof import("child_process");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js readline module only available on desktop, guarded by Platform.isDesktop
+    const readlineModule = require("readline") as typeof import("readline");
+    spawn = childProcessModule.spawn;
+    createInterface = readlineModule.createInterface;
 }
 
 export type EventHandler = (event: RpcEvent) => void;
@@ -243,6 +245,7 @@ export class PiConnection {
         this.process.on("exit", (code: number | null, signal: string | null) => {
             // Suppress error if intentionally destroyed (e.g., reconnecting after API key change)
             if (this.intentionallyDestroyed) {
+                // eslint-disable-next-line obsidianmd/rule-custom-message -- Intentional debug logging for connection lifecycle
                 console.log("[Pi RPC] Process exited (intentional destroy), code", code, "signal", signal);
                 this.connected = false;
                 this.cleanup();

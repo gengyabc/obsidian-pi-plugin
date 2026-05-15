@@ -17,20 +17,26 @@
 // Guard Node.js imports for desktop-only (Rule 36)
 import { Platform } from "obsidian";
 
-let _readFile: typeof import("fs/promises").readFile;
-let _readdir: typeof import("fs/promises").readdir;
-let _stat: typeof import("fs/promises").stat;
-let _join: typeof import("path").join;
-let _basename: typeof import("path").basename;
-let _homedir: typeof import("os").homedir;
+let _readFile: (path: string, encoding: "utf-8") => Promise<string>;
+let _readdir: (path: string) => Promise<string[]>;
+let _stat: (path: string) => Promise<import("fs").Stats>;
+let _join: (...paths: string[]) => string;
+let _basename: (path: string, suffix?: string) => string;
+let _homedir: () => string;
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ readFile: _readFile, readdir: _readdir, stat: _stat } = require("fs/promises"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ join: _join, basename: _basename } = require("path"));
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports -- Node.js os module only available on desktop, guarded by Platform.isDesktop (Rule 36)
-    ({ homedir: _homedir } = require("os"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop
+    const fsPromisesModule = require("fs/promises") as typeof import("fs/promises");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop
+    const pathModule = require("path") as typeof import("path");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js os module only available on desktop, guarded by Platform.isDesktop
+    const osModule = require("os") as typeof import("os");
+    _readFile = (...args) => fsPromisesModule.readFile(...args);
+    _readdir = (...args) => fsPromisesModule.readdir(...args);
+    _stat = (...args) => fsPromisesModule.stat(...args);
+    _join = (...args) => pathModule.join(...args);
+    _basename = (...args) => pathModule.basename(...args);
+    _homedir = () => osModule.homedir();
 }
 
 export interface PiSession {

@@ -93,7 +93,7 @@ describe("Pi config file reading", () => {
         mockedFs.readFileSync.mockReturnValue(JSON.stringify(mockSettings));
 
         const content = fs.readFileSync("/home/testuser/.pi/agent/settings.json", "utf-8");
-        const settings = JSON.parse(content);
+        const settings = JSON.parse(content) as { defaultProvider: string; defaultModel: string };
 
         expect(settings.defaultProvider).toBe("anthropic");
         expect(settings.defaultModel).toBe("claude-sonnet-4");

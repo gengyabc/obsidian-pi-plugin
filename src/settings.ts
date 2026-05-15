@@ -118,7 +118,7 @@ export class PiSettingTab extends PluginSettingTab {
         this.createProviderModelSettings(containerEl);
 
         // API keys section - uses SecretStorage
-        void this.createApiKeySettings(containerEl);
+        this.createApiKeySettings(containerEl);
 
         // Platform-specific help sections
         if (Platform.isDesktop) {
@@ -205,7 +205,7 @@ export class PiSettingTab extends PluginSettingTab {
                     }
                     await this.plugin.saveSettings();
                     // Re-check API keys and refresh UI
-                    await this.plugin.checkMissingApiKeys();
+                    this.plugin.checkMissingApiKeys();
                     this.display(); // Refresh to update model dropdown and API key status
                 });
             });
@@ -241,7 +241,7 @@ export class PiSettingTab extends PluginSettingTab {
      * Keys are stored securely in system keychain via SecretStorage.
      * Highlights the key required for the currently selected provider.
      */
-    private async createApiKeySettings(containerEl: HTMLElement): Promise<void> {
+    private createApiKeySettings(containerEl: HTMLElement): void {
         new Setting(containerEl).setHeading().setName(t("settings.apiKeys.heading"));
 
         const piConfig = loadPiModelsConfig();
@@ -264,7 +264,7 @@ export class PiSettingTab extends PluginSettingTab {
         const infoDiv = containerEl.createDiv({ cls: "setting-item-description" });
         if (requiredEnvVarForSelected) {
             const secretName = `pi-plugin-${requiredEnvVarForSelected.toLowerCase().replace(/_/g, "-")}`;
-            const key = await this.app.secretStorage.getSecret(secretName);
+            const key = this.app.secretStorage.getSecret(secretName);
             const hasKey = !!key;
             infoDiv.setText(t("settings.apiKeys.selectedProviderInfo", {
                 provider: selectedProvider,
@@ -282,13 +282,17 @@ export class PiSettingTab extends PluginSettingTab {
                 .map((p) => p.name);
 
             const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-            const existingKey = await this.app.secretStorage.getSecret(secretName);
+            const existingKey = this.app.secretStorage.getSecret(secretName);
             const hasKey = !!existingKey;
             const isRequiredForSelected = envVar === requiredEnvVarForSelected;
 
             new Setting(containerEl)
                 .setName(isRequiredForSelected ? `${envVar} ✓` : envVar)
-                .setDesc(t("settings.apiKeys.usedBy", { providers: providerNames.join(", "), stored: hasKey ? t("settings.apiKeys.keyStored") : "" }))
+                .setDesc(
+                    hasKey
+                        ? t("settings.apiKeys.usedByStored", { providers: providerNames.join(", ") })
+                        : t("settings.apiKeys.usedBy", { providers: providerNames.join(", ") }),
+                )
                 .addText((text) => {
                     text
                         .setPlaceholder(hasKey ? t("settings.apiKeys.enterNew") : t("settings.apiKeys.placeholder"))
@@ -301,19 +305,13 @@ export class PiSettingTab extends PluginSettingTab {
                         text.inputEl.addClass("pi-api-key-required");
                     }
                     
-                    text.inputEl.addEventListener("change", async () => {
+                    text.inputEl.addEventListener("change", () => {
                         const value = text.inputEl.value;
-                        if (value) {
-                            // Store the key in SecretStorage
-                            await this.app.secretStorage.setSecret(secretName, value);
-                            text.inputEl.value = "";
-                            text.setPlaceholder(t("settings.apiKeys.keyStored"));
-                            new Notice(t("notices.keyStored", { envVar }));
-                            // Reconnect to pick up the new key (async, no await needed)
-                            void this.plugin.reconnectAfterKeyChange();
-                            // Refresh to update status
-                            this.display();
+                        if (!value) {
+                            return;
                         }
+
+                        this.storeApiKey(secretName, value, envVar, text);
                     });
                 })
                 .settingEl.addClass("pi-api-key-setting");
@@ -331,6 +329,20 @@ export class PiSettingTab extends PluginSettingTab {
                         this.display();
                     })
             );
+    }
+
+    private storeApiKey(
+        secretName: string,
+        value: string,
+        envVar: string,
+        text: { inputEl: HTMLInputElement; setPlaceholder(value: string): unknown },
+    ): void {
+        this.app.secretStorage.setSecret(secretName, value);
+        text.inputEl.value = "";
+        text.setPlaceholder(t("settings.apiKeys.keyStored"));
+        new Notice(t("notices.keyStored", { envVar }));
+        void this.plugin.reconnectAfterKeyChange();
+        this.display();
     }
 
     private createPlatformHelpSections(containerEl: HTMLElement): void {

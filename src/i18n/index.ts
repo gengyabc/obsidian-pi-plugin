@@ -19,8 +19,8 @@ function normalizeLocale(module: LocaleModule): Record<string, string> {
 }
 
 const locales: Record<string, Record<string, string>> = {
-    en: normalizeLocale(en as LocaleModule),
-    zh: normalizeLocale(zh as LocaleModule),
+    en: normalizeLocale(en),
+    zh: normalizeLocale(zh),
 };
 
 /**

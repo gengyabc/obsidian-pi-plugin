@@ -48,7 +48,7 @@ export class ChatInput {
         this.textareaEl = inputArea.createEl("textarea", {
             cls: "pi-input-textarea",
             attr: {
-                placeholder: "Message Pi... (/ for commands, @ for files)",
+                placeholder: "Message pi... (/ for commands, @ for files)",
                 rows: "1",
             },
         });
@@ -205,10 +205,9 @@ export class ChatInput {
 
     private autoResize(): void {
         const el = this.textareaEl;
-        // Reset height to get accurate scrollHeight measurement
-        el.style.height = 'auto';
+        el.setCssProps({ "--pi-input-height": "auto" });
         const computedHeight = Math.min(el.scrollHeight, 200);
-        el.style.height = `${computedHeight}px`;
+        el.setCssProps({ "--pi-input-height": `${computedHeight}px` });
     }
 
     private handlePaste(e: ClipboardEvent): void {

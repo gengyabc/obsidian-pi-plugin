@@ -141,7 +141,7 @@ export class PiChatView extends ItemView {
         return "message-circle";
     }
 
-    async onOpen(): Promise<void> {
+    onOpen(): Promise<void> {
         const container = this.contentEl;
         container.empty();
         container.addClass("pi-chat-container");
@@ -159,7 +159,7 @@ export class PiChatView extends ItemView {
             onSwitch: (session) => this.switchToSession(session),
             onDelete: (session) => this.deleteSession(session),
             onExport: (session) => this.exportSession(session),
-        });
+        }, this.app);
 
         // Scrollable messages area
         this.messagesContainer = chatBody.createDiv({ cls: "pi-messages" });
@@ -194,6 +194,7 @@ export class PiChatView extends ItemView {
 
         // Wire up RPC event stream so responses are rendered
         void this.connectToRpc();
+        return Promise.resolve();
     }
 
     async onClose(): Promise<void> {
@@ -307,13 +308,9 @@ export class PiChatView extends ItemView {
 
             this.streamHandler.handleEvent(event);
             if (event.type === "agent_end") {
-                this.refreshHeader();
+                void this.refreshHeader();
                 window.setTimeout(() => {
-                    this.updateCurrentSessionFromPi()
-                        .then(() => this.syncForkEntryIds())
-                        .catch((err) =>
-                            console.warn("[Pi Chat] Failed to sync fork ids after agent_end:", err),
-                        );
+                    void this.syncForkStateAfterAgentEnd();
                 }, 0);
             }
         };
@@ -323,7 +320,7 @@ export class PiChatView extends ItemView {
 
         // Initial header refresh + restore last session after connection
         window.setTimeout(() => {
-            this.refreshHeader();
+            void this.refreshHeader();
             void this.restoreSession();
         }, 1000);
     }
@@ -363,6 +360,15 @@ export class PiChatView extends ItemView {
             }
         } catch {
             // Non-fatal
+        }
+    }
+
+    private async syncForkStateAfterAgentEnd(): Promise<void> {
+        try {
+            await this.updateCurrentSessionFromPi();
+            await this.syncForkEntryIds();
+        } catch (err) {
+            console.warn("[Pi Chat] Failed to sync fork ids after agent_end:", err);
         }
     }
 
@@ -407,7 +413,7 @@ export class PiChatView extends ItemView {
             cls: "pi-header-new-btn",
             attr: { "aria-label": t("view.newBtn.tooltip") },
         });
-        newBtn.setText("+ New");
+        newBtn.setText("+ new");
         newBtn.addEventListener("click", () => { void this.newSessionFromHeader(); });
     }
 
@@ -477,26 +483,8 @@ export class PiChatView extends ItemView {
         input.focus();
         input.select();
 
-        const commit = async () => {
-            const newName = input.value.trim();
-            this.isEditingName = false;
-            if (this.headerSessionName) {
-                this.headerSessionName.empty();
-                this.headerSessionName.setText(newName || currentName);
-            }
-            if (newName && newName !== currentName) {
-                try {
-                    const conn = await this.plugin.ensureConnection();
-                    await conn.send({ type: "set_session_name", name: newName });
-                } catch (err) {
-                    console.warn("[Pi Chat] Failed to rename session:", err);
-                    new Notice(t("notices.renameFailed"));
-                    // Revert
-                    if (this.headerSessionName) {
-                        this.headerSessionName.setText(currentName);
-                    }
-                }
-            }
+        const commit = (): void => {
+            void this.commitSessionNameEdit(input, currentName);
         };
 
         input.addEventListener("blur", commit);
@@ -517,6 +505,32 @@ export class PiChatView extends ItemView {
     /**
      * Load messages from Pi's session via get_messages RPC and display them.
      */
+    private async commitSessionNameEdit(
+        input: HTMLInputElement,
+        currentName: string,
+    ): Promise<void> {
+        const newName = input.value.trim();
+        this.isEditingName = false;
+        if (this.headerSessionName) {
+            this.headerSessionName.empty();
+            this.headerSessionName.setText(newName || currentName);
+        }
+        if (!newName || newName === currentName) {
+            return;
+        }
+
+        try {
+            const conn = await this.plugin.ensureConnection();
+            await conn.send({ type: "set_session_name", name: newName });
+        } catch (err) {
+            console.warn("[Pi Chat] Failed to rename session:", err);
+            new Notice(t("notices.renameFailed"));
+            if (this.headerSessionName) {
+                this.headerSessionName.setText(currentName);
+            }
+        }
+    }
+
     private async loadMessagesFromPi(): Promise<void> {
         const conn = this.plugin.connection;
         if (!conn?.isConnected()) return;
@@ -615,7 +629,7 @@ export class PiChatView extends ItemView {
      * Public API for starting a new session (used by command palette).
      */
     startNewSession(): void {
-        this.newSessionFromHeader();
+        void this.newSessionFromHeader();
     }
 
     /**
@@ -1687,7 +1701,7 @@ export class PiChatView extends ItemView {
             // Connection may not be available yet — command suggest will return empty
         }
 
-        this.commandSuggest.trigger((commandText) => {
+        void this.commandSuggest.trigger((commandText) => {
             if (this.chatInput) {
                 this.chatInput.setValue(commandText);
                 this.chatInput.focus();
@@ -1735,8 +1749,8 @@ export class PiChatView extends ItemView {
         if (msg.content) {
             // Text is streaming — collapse live thinking block
             const liveThinking = this.streamingMessageEl.querySelector(".pi-thinking-live");
-            if (liveThinking) {
-                (liveThinking as HTMLDetailsElement).open = false;
+            if (liveThinking?.instanceOf(HTMLDetailsElement)) {
+                liveThinking.open = false;
                 liveThinking.removeClass("pi-thinking-live");
             }
 
@@ -1750,13 +1764,19 @@ export class PiChatView extends ItemView {
             }
         } else if (msg.thinkingContent) {
             // Thinking in progress — show expandable live thinking block
-            let thinkingEl = this.streamingMessageEl.querySelector(".pi-thinking-live") as HTMLDetailsElement | null;
-            if (!thinkingEl) {
+            let thinkingEl = this.streamingMessageEl.querySelector(".pi-thinking-live");
+            if (!thinkingEl?.instanceOf(HTMLDetailsElement)) {
                 thinkingEl = createEl("details", { cls: "pi-thinking pi-thinking-live" });
-                thinkingEl.open = true;
-                thinkingEl.createEl("summary", { text: t("view.thinking") });
-                thinkingEl.createDiv({ cls: "pi-thinking-content" });
                 this.streamingMessageEl.insertBefore(thinkingEl, contentEl);
+            }
+            if (thinkingEl.instanceOf(HTMLDetailsElement)) {
+                thinkingEl.open = true;
+                if (!thinkingEl.querySelector("summary")) {
+                    thinkingEl.createEl("summary", { text: t("view.thinking") });
+                }
+                if (!thinkingEl.querySelector(".pi-thinking-content")) {
+                    thinkingEl.createDiv({ cls: "pi-thinking-content" });
+                }
             }
             const thinkingContentEl = thinkingEl.querySelector(".pi-thinking-content");
             if (thinkingContentEl) {

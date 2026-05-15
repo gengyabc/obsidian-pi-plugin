@@ -20,6 +20,15 @@ interface ModelOption {
     provider: string;
 }
 
+interface DesktopVaultAdapter {
+    getBasePath(): string;
+}
+
+function isDesktopVaultAdapter(adapter: object): adapter is DesktopVaultAdapter {
+    const maybeAdapter = adapter as { getBasePath?: unknown };
+    return typeof maybeAdapter.getBasePath === "function";
+}
+
 /**
  * Modal for selecting a model from Pi's available models.
  */
@@ -75,7 +84,7 @@ export default class PiPlugin extends Plugin {
         );
 
         // Ribbon icon to open chat
-        this.addRibbonIcon("message-circle", "Open Pi chat", () => {
+        this.addRibbonIcon("message-circle", "Open pi chat", () => {
             void this.activateView();
         });
 
@@ -130,11 +139,11 @@ export default class PiPlugin extends Plugin {
         // Auto-save conversation before unloading (best-effort, silent)
         const view = this.getActiveView();
         if (view && view.hasMessages()) {
-            view.autoSave().catch(() => {});
+            void view.autoSave().catch(() => {});
         }
 
         // Flush message store (best-effort, silent)
-        this.flushMessageStore().catch(() => {});
+        void this.flushMessageStore().catch(() => {});
         if (this.storeFlushTimer) {
             window.clearTimeout(this.storeFlushTimer);
             this.storeFlushTimer = null;
@@ -168,7 +177,7 @@ export default class PiPlugin extends Plugin {
         }
 
         if (leaf) {
-            workspace.revealLeaf(leaf);
+            void workspace.revealLeaf(leaf);
         }
 
         return this.getActiveView()!;
@@ -229,20 +238,8 @@ export default class PiPlugin extends Plugin {
         const modal = new SessionListModal(
             this.app,
             entries,
-            async (entry) => {
-                try {
-                    const messages = await this.sessionManager.loadSession(
-                        entry.file.path,
-                        this.app.vault,
-                    );
-                    const view = await this.activateView();
-                    view.displayMessages(messages, true);
-                    new Notice(t("notices.loadedSession", { date: entry.date }));
-                } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    new Notice(t("notices.loadFailed", { msg }));
-                    console.error("[Pi Plugin] Load session error:", err);
-                }
+            (entry) => {
+                void this.loadSessionEntry(entry.file.path, entry.date);
             },
         );
         modal.open();
@@ -254,6 +251,19 @@ export default class PiPlugin extends Plugin {
     private async newSession(): Promise<void> {
         const view = await this.activateView();
         view.startNewSession();
+    }
+
+    private async loadSessionEntry(path: string, date: string): Promise<void> {
+        try {
+            const messages = await this.sessionManager.loadSession(path, this.app.vault);
+            const view = await this.activateView();
+            view.displayMessages(messages, true);
+            new Notice(t("notices.loadedSession", { date }));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(t("notices.loadFailed", { msg }));
+            console.error("[Pi Plugin] Load session error:", err);
+        }
     }
 
     /**
@@ -306,7 +316,7 @@ export default class PiPlugin extends Plugin {
      */
     private async sendPiCommand(commandName: string): Promise<void> {
         const view = await this.activateView();
-        view.sendMessage(`/${commandName}`);
+        void view.sendMessage(`/${commandName}`);
     }
 
     /**
@@ -329,7 +339,7 @@ export default class PiPlugin extends Plugin {
         if (this.storeFlushTimer) return;
         this.storeFlushTimer = window.setTimeout(() => {
             this.storeFlushTimer = null;
-            this.flushMessageStore().catch(() => {});
+            void this.flushMessageStore().catch(() => {});
         }, 2000);
     }
 
@@ -360,9 +370,9 @@ export default class PiPlugin extends Plugin {
      * Get or create a PiConnection using current settings.
      * Async because API keys must be loaded from SecretStorage.
      */
-    async ensureConnection(): Promise<PiConnection> {
+    ensureConnection(): Promise<PiConnection> {
         if (this.connection && this.connection.isConnected()) {
-            return this.connection;
+            return Promise.resolve(this.connection);
         }
 
         // Destroy old dead connection if it exists
@@ -371,25 +381,25 @@ export default class PiPlugin extends Plugin {
             this.connection = null;
         }
 
-        // Load API keys from SecretStorage (async)
-        const apiKeys = await this.loadApiKeys();
+        // Load API keys from SecretStorage
+        const apiKeys = this.loadApiKeys();
 
         // Create connection with loaded keys
-        await this.createConnection(apiKeys);
-        return this.connection!;
+        this.createConnection(apiKeys);
+        return Promise.resolve(this.connection!);
     }
 
     /**
      * Load all required API keys from SecretStorage.
      */
-    private async loadApiKeys(): Promise<Record<string, string>> {
+    private loadApiKeys(): Record<string, string> {
         const apiKeys: Record<string, string> = {};
         const piConfig = loadPiModelsConfig();
         if (piConfig) {
             const requiredEnvVars = getRequiredEnvVars(piConfig);
             for (const envVar of requiredEnvVars) {
                 const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-                const key = await this.app.secretStorage.getSecret(secretName);
+                const key = this.app.secretStorage.getSecret(secretName);
                 if (key) {
                     apiKeys[envVar] = key;
                 }
@@ -402,10 +412,10 @@ export default class PiPlugin extends Plugin {
      * Create a PiConnection and set up event handlers.
      * Shared between ensureConnection() and reconnectAfterKeyChange().
      */
-    private async createConnection(apiKeys: Record<string, string>): Promise<void> {
+    private createConnection(apiKeys: Record<string, string>): void {
         // Determine working directory: setting, or parent of vault root
         const adapter = this.app.vault.adapter;
-        if (!('getBasePath' in adapter) || typeof adapter.getBasePath !== 'function') {
+        if (!isDesktopVaultAdapter(adapter)) {
             showCriticalNotice(t("notices.mobileUnsupported"));
             throw new Error("Vault adapter does not support getBasePath (mobile not supported)");
         }
@@ -439,11 +449,14 @@ export default class PiPlugin extends Plugin {
             // Set up event handlers
             this.connection.onEvent((event) => {
                 const type = event.type;
+                const statusBar = this.statusBar;
                 if (type === "agent_start") {
-                    this.statusBar?.setStreaming(true);
+                    statusBar?.setStreaming(true);
                 } else if (type === "agent_end") {
-                    this.statusBar?.setStreaming(false);
-                    this.statusBar?.refreshStats();
+                    statusBar?.setStreaming(false);
+                    if (statusBar) {
+                        void statusBar.refreshStats();
+                    }
                 } else if (type === "auto_compaction_end") {
                     new Notice(t("notices.compacted"));
                 }
@@ -460,8 +473,11 @@ export default class PiPlugin extends Plugin {
 
             // Refresh status bar and register commands once connected
             window.setTimeout(() => {
-                this.statusBar?.refreshModel();
-                this.statusBar?.refreshStats();
+                const statusBar = this.statusBar;
+                if (statusBar) {
+                    void statusBar.refreshModel();
+                    void statusBar.refreshStats();
+                }
                 void this.registerPiCommands();
             }, 1000);
         } catch (err) {
@@ -493,25 +509,34 @@ export default class PiPlugin extends Plugin {
                 provider: (m.provider as string) ?? "",
             })).filter((m) => m.id);
 
-            const modal = new ModelSwitchModal(this.app, options, async (selected) => {
-                try {
-                    await conn.send({
-                        type: "set_model",
-                        provider: selected.provider,
-                        modelId: selected.id,
-                    });
-                    new Notice(t("notices.modelSwitched", { name: selected.name }));
-                    this.statusBar?.setModel(selected.name, "");
-                    this.statusBar?.refreshModel();
-                } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    showCriticalNotice(t("notices.modelSwitchFailed", { msg }));
-                }
+            const modal = new ModelSwitchModal(this.app, options, (selected) => {
+                void this.applyModelSelection(conn, selected);
             });
             modal.open();
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             showCriticalNotice(t("notices.modelsFetchFailed", { msg }));
+        }
+    }
+
+    private async applyModelSelection(
+        conn: PiConnection,
+        selected: ModelOption,
+    ): Promise<void> {
+        try {
+            await conn.send({
+                type: "set_model",
+                provider: selected.provider,
+                modelId: selected.id,
+            });
+            new Notice(t("notices.modelSwitched", { name: selected.name }));
+            if (this.statusBar) {
+                this.statusBar.setModel(selected.name, "");
+                void this.statusBar.refreshModel();
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            showCriticalNotice(t("notices.modelSwitchFailed", { msg }));
         }
     }
 
@@ -539,18 +564,18 @@ export default class PiPlugin extends Plugin {
      * Reconnect to Pi after API key change.
      * Destroys existing connection and creates a new one with updated keys.
      */
-    async reconnectAfterKeyChange(): Promise<void> {
+    reconnectAfterKeyChange(): void {
         const hadConnection = this.connection !== null;
         if (this.connection) {
             this.connection.destroy();
             this.connection = null;
         }
 
-        // Load API keys from SecretStorage (async)
-        const apiKeys = await this.loadApiKeys();
+        // Load API keys from SecretStorage
+        const apiKeys = this.loadApiKeys();
 
         // Create new connection with loaded keys
-        await this.createConnection(apiKeys);
+        this.createConnection(apiKeys);
 
         // Only show notice if we actually restarted a connection
         if (hadConnection) {
@@ -594,7 +619,7 @@ export default class PiPlugin extends Plugin {
      * Check for missing API keys based on the selected provider.
      * Shows error if the provider's API key is not set in SecretStorage.
      */
-    async checkMissingApiKeys(): Promise<void> {
+    checkMissingApiKeys(): void {
         const piConfig = loadPiModelsConfig();
         if (!piConfig) return;  // No config file, nothing to check
 
@@ -607,7 +632,7 @@ export default class PiPlugin extends Plugin {
 
         const envVar = providerConfig.apiKey;
         const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-        const key = await this.app.secretStorage.getSecret(secretName);
+        const key = this.app.secretStorage.getSecret(secretName);
         if (!key) {
             showCriticalNotice(t("notices.missingApiKeys", { keys: envVar }));
         }

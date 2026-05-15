@@ -72,30 +72,37 @@ export class AttachmentPicker {
         const modal = new FileSuggestModal(
             this.app,
             files,
-            async (file: TFile) => {
-                try {
-                    // Check file size before reading
-                    const stat = await this.app.vault.adapter.stat(file.path);
-                    if (stat && stat.size > AttachmentPicker.MAX_FILE_SIZE) {
-                        const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
-                        new Notice(t("notices.fileTooLarge", { size: sizeMB }));
-                        return;
-                    }
-
-                    const content = await this.app.vault.cachedRead(file);
-                    const attachment: Attachment = {
-                        type: "file",
-                        name: file.name,
-                        content,
-                        size: stat?.size,
-                    };
-                    onAttach(attachment);
-                } catch (err) {
-                    console.error("[Pi Attachments] Failed to read file:", err);
-                    new Notice(t("notices.fileReadFailed"));
-                }
+            (file: TFile) => {
+                void this.handleFileSelection(file, onAttach);
             },
         );
         modal.open();
+    }
+
+    private async handleFileSelection(
+        file: TFile,
+        onAttach: (attachment: Attachment) => void,
+    ): Promise<void> {
+        try {
+            // Check file size before reading
+            const stat = await this.app.vault.adapter.stat(file.path);
+            if (stat && stat.size > AttachmentPicker.MAX_FILE_SIZE) {
+                const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+                new Notice(t("notices.fileTooLarge", { size: sizeMB }));
+                return;
+            }
+
+            const content = await this.app.vault.cachedRead(file);
+            const attachment: Attachment = {
+                type: "file",
+                name: file.name,
+                content,
+                size: stat?.size,
+            };
+            onAttach(attachment);
+        } catch (err) {
+            console.error("[Pi Attachments] Failed to read file:", err);
+            new Notice(t("notices.fileReadFailed"));
+        }
     }
 }
