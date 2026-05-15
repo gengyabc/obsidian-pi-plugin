@@ -3,6 +3,8 @@
 在 Obsidian 中与 [Pi 编程助手](https://github.com/earendil-works/pi/tree/main/packages/coding-agent)对话。对话内容以原生 Obsidian Markdown 格式渲染，完整支持代码高亮、Mermaid 图表、callout 引用块和 wiki 链接。
 
 > **仅支持桌面端。** 需要本地安装 Pi（`npm i -g @earendil-works/pi-coding-agent`）。
+>
+> **系统访问：** 本插件读取 `~/.pi/agent/`（Pi 的配置目录）以发现提供商、模型和会话历史。这需要通过 `os.homedir()` 访问你的主目录路径。
 
 [English](README.md) | **中文**
 
@@ -58,6 +60,18 @@
 | 会话保存目录 | `Pi-Sessions` | 保存对话的库目录 |
 | 持久化会话 | `true` | 自动将对话保存为库笔记 |
 | 思考级别 | `medium` | 推理级别（none、low、medium、high） |
+
+## 隐私与系统访问
+
+本插件与你现有的 Pi 安装集成，需要访问以下路径：
+
+| 路径 | 用途 |
+|------|--------|
+| `~/.pi/agent/models.json` | 发现可用的 LLM 提供商和模型 |
+| `~/.pi/agent/sessions/` | 浏览和加载 Pi 对话历史 |
+| `~/.pi/agent/prompts/` | 自定义提示模板 |
+
+这些路径通过 `os.homedir()` 解析以定位 Pi 的配置目录。本插件**不**收集、传输或存储任何系统身份信息——仅使用这些路径读取 Pi 的本地配置文件。
 
 ## 架构
 

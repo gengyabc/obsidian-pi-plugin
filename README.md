@@ -3,6 +3,8 @@
 Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) inside Obsidian. Conversations render as native Obsidian markdown with full support for code highlighting, Mermaid diagrams, callouts, and wiki-links.
 
 > **Desktop only.** Requires Pi installed locally (`npm i -g @earendil-works/pi-coding-agent`).
+>
+> **System access:** This plugin reads `~/.pi/agent/` (Pi's config directory) to discover providers, models, and session history. This requires accessing your home directory path via `os.homedir()`.
 
 **English** | [中文](README-zh.md)
 
@@ -58,6 +60,18 @@ Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/p
 | Session save directory | `Pi-Sessions` | Vault directory for saved conversations |
 | Persist sessions | `true` | Auto-save conversations as vault notes |
 | Thinking level | `medium` | Reasoning level (none, low, medium, high) |
+
+## Privacy & System Access
+
+This plugin integrates with your existing Pi installation and needs access to:
+
+| Path | Purpose |
+|------|--------|
+| `~/.pi/agent/models.json` | Discover available LLM providers and models |
+| `~/.pi/agent/sessions/` | Browse and load your Pi conversation history |
+| `~/.pi/agent/prompts/` | Custom prompt templates |
+
+These paths are resolved using `os.homedir()` to locate Pi's configuration directory. The plugin does **not** collect, transmit, or store any system identity information — it only uses these paths to read Pi's local config files.
 
 ## Architecture
 

@@ -3,7 +3,7 @@
     "name": "PiChat",
     "version": "0.1.0",
     "minAppVersion": "1.11.4",
-    "description": "Chat with Pi coding agent locally.",
+    "description": "Chat with Pi coding agent locally. Reads ~/.pi/agent for Pi's config and session history.",
     "author": "Geng",
     "isDesktopOnly": true
 }
