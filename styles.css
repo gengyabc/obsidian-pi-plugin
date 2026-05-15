@@ -1,13 +1,14 @@
 /* Pi Plugin — Chat View Styles */
 
 /* Utility: hide elements via CSS class instead of inline styles */
-.pi-session-panel.is-hidden,
-.pi-attachments.is-hidden,
-.pi-abort-btn.is-hidden,
-.pi-header-model.is-hidden,
-.pi-header-cwd.is-hidden,
-.pi-env-var-container.is-hidden {
-    display: none !important;
+/* Use higher specificity by scoping to plugin container */
+.pi-chat-container .pi-session-panel.is-hidden,
+.pi-chat-container .pi-attachments.is-hidden,
+.pi-chat-container .pi-abort-btn.is-hidden,
+.pi-chat-container .pi-header-model.is-hidden,
+.pi-chat-container .pi-header-cwd.is-hidden,
+.pi-chat-container .pi-env-var-container.is-hidden {
+    display: none;
 }
 
 /* Env var hint container for provider dropdown */
@@ -370,6 +371,9 @@
 }
 
 .pi-message-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-bottom: 4px;
 }
 
@@ -702,12 +706,6 @@
 }
 
 /* ── Rewind button (user message actions) ── */
-.pi-message-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
 .pi-message-actions {
     display: inline-flex;
     align-items: center;

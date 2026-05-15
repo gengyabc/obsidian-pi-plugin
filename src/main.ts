@@ -66,7 +66,7 @@ export default class PiPlugin extends Plugin {
     /** IDs of dynamically registered Pi commands (for cleanup on re-registration) */
     private dynamicCommandIds: string[] = [];
     /** Debounce timer for message store persistence */
-    private storeFlushTimer: ReturnType<typeof activeWindow.setTimeout> | null = null;
+    private storeFlushTimer: number | null = null;
 
     async onload(): Promise<void> {
         await this.loadSettings();
@@ -140,7 +140,7 @@ export default class PiPlugin extends Plugin {
         // Flush message store (best-effort, silent)
         void this.flushMessageStore().catch(() => {});
         if (this.storeFlushTimer) {
-            activeWindow.clearTimeout(this.storeFlushTimer);
+            window.clearTimeout(this.storeFlushTimer);
             this.storeFlushTimer = null;
         }
 
@@ -332,7 +332,7 @@ export default class PiPlugin extends Plugin {
      */
     scheduleStoreFlush(): void {
         if (this.storeFlushTimer) return;
-        this.storeFlushTimer = activeWindow.setTimeout(() => {
+        this.storeFlushTimer = window.setTimeout(() => {
             this.storeFlushTimer = null;
             void this.flushMessageStore().catch(() => {});
         }, 2000);
@@ -471,7 +471,7 @@ export default class PiPlugin extends Plugin {
             });
 
             // Refresh status bar and register commands once connected
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
                 const statusBar = this.statusBar;
                 if (statusBar) {
                     void statusBar.refreshModel();
@@ -492,7 +492,7 @@ export default class PiPlugin extends Plugin {
      */
     private async switchModel(): Promise<void> {
         try {
-            const conn = await this.ensureConnection();
+            const conn = this.ensureConnection();
             const response = await conn.send({ type: "get_available_models" });
             const data = response.data;
             const models = (data?.models as Array<Record<string, unknown>>) ?? [];
@@ -544,7 +544,7 @@ export default class PiPlugin extends Plugin {
      */
     private async sendTestPrompt(): Promise<void> {
         try {
-            const conn = await this.ensureConnection();
+            const conn = this.ensureConnection();
 
             new Notice(t("notices.sending"));
 

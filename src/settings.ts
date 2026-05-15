@@ -3,7 +3,7 @@ import { Platform } from "obsidian";
 import type PiPlugin from "./main";
 import { t } from "./i18n/index";
 
-import { readPiModelsConfig, getProviderEnvVarName, getProviderModels, ProviderInfo, ModelInfo, readProviders } from "./pi-config-reader";
+import { readPiModelsConfig, getProviderEnvVarName, getProviderModels, ProviderInfo } from "./pi-config-reader";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
@@ -283,7 +283,7 @@ export class PiSettingTab extends PluginSettingTab {
         hintEl.empty();
 
         // Get or create button element (reuse if exists)
-        let btnEl = containerEl.querySelector(".pi-env-var-add-btn") as HTMLButtonElement | null;
+        let btnEl = containerEl.querySelector<HTMLButtonElement>(".pi-env-var-add-btn");
         if (!btnEl) {
             btnEl = containerEl.createEl("button", {
                 cls: "pi-env-var-add-btn",

@@ -1,4 +1,4 @@
-# Pi Plugin for Obsidian
+# PiChat
 
 Chat with the [Pi coding agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) inside Obsidian. Conversations render as native Obsidian markdown with full support for code highlighting, Mermaid diagrams, callouts, and wiki-links.
 

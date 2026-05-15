@@ -17,11 +17,11 @@ let path: typeof import("path");
 
 if (Platform.isDesktop) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop
-    fs = require("fs");
+    fs = require("fs") as typeof import("fs");
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js os module only available on desktop
-    os = require("os");
+    os = require("os") as typeof import("os");
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop
-    path = require("path");
+    path = require("path") as typeof import("path");
 }
 
 /** Model definition from Pi's models.json */

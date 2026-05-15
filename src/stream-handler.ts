@@ -251,10 +251,14 @@ export class StreamHandler {
         // Check for error message in the message (e.g., API auth errors)
         const message = event.message as Record<string, unknown> | undefined;
         if (message && message.errorMessage) {
-            this.currentMessage.error = String(message.errorMessage);
+            // errorMessage might be a string or an object — extract the text
+            const errMsg = typeof message.errorMessage === 'string'
+                ? message.errorMessage
+                : JSON.stringify(message.errorMessage);
+            this.currentMessage.error = errMsg;
             // Also show error notice to user
             if (this.callbacks.onError) {
-                this.callbacks.onError(String(message.errorMessage));
+                this.callbacks.onError(errMsg);
             }
         }
 

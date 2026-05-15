@@ -104,7 +104,7 @@ export class PiChatView extends ItemView {
     private streamingComponent: Component | null = null;
 
     /** Debounce timer for live markdown re-rendering during streaming */
-    private streamRenderTimer: ReturnType<typeof activeWindow.setTimeout> | null = null;
+    private streamRenderTimer: number | null = null;
 
     /** Latest streamed content waiting to be rendered */
     private pendingStreamContent: string | null = null;
@@ -212,7 +212,7 @@ export class PiChatView extends ItemView {
         this.streamHandler.reset();
         this.removeThinkingIndicator();
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -295,7 +295,7 @@ export class PiChatView extends ItemView {
      * Wire this view to a PiConnection's event stream.
      */
     async connectToRpc(): Promise<void> {
-        const conn = await this.plugin.ensureConnection();
+        const conn = this.plugin.ensureConnection();
         if (this.rpcEventHandler) {
             conn.offEvent(this.rpcEventHandler);
         }
@@ -309,7 +309,7 @@ export class PiChatView extends ItemView {
             this.streamHandler.handleEvent(event);
             if (event.type === "agent_end") {
                 void this.refreshHeader();
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     void this.syncForkStateAfterAgentEnd();
                 }, 0);
             }
@@ -319,7 +319,7 @@ export class PiChatView extends ItemView {
         this.commandSuggest.setConnection(conn);
 
         // Initial header refresh + restore last session after connection
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
             void this.refreshHeader();
             void this.restoreSession();
         }, 1000);
@@ -520,7 +520,7 @@ export class PiChatView extends ItemView {
         }
 
         try {
-            const conn = await this.plugin.ensureConnection();
+            const conn = this.plugin.ensureConnection();
             await conn.send({ type: "set_session_name", name: newName });
         } catch (err) {
             console.warn("[Pi Chat] Failed to rename session:", err);
@@ -1429,7 +1429,7 @@ export class PiChatView extends ItemView {
             message += `\n\n<file path="${att.name}">\n${att.content}\n</file>`;
         }
 
-        const conn = await this.plugin.ensureConnection();
+        const conn = this.plugin.ensureConnection();
 
         // During streaming: steer the agent. Otherwise: new prompt.
         const command: Record<string, unknown> = {
@@ -1565,7 +1565,7 @@ export class PiChatView extends ItemView {
 
         // Clear any pending stream content and timers
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1757,7 +1757,7 @@ export class PiChatView extends ItemView {
             // Schedule debounced markdown re-render
             this.pendingStreamContent = msg.content;
             if (!this.streamRenderTimer) {
-                this.streamRenderTimer = activeWindow.setTimeout(() => {
+                this.streamRenderTimer = window.setTimeout(() => {
                     this.streamRenderTimer = null;
                     this.renderStreamingMarkdown();
                 }, 100);
@@ -1839,7 +1839,7 @@ export class PiChatView extends ItemView {
 
         // Cancel any pending debounced render
         if (this.streamRenderTimer) {
-            activeWindow.clearTimeout(this.streamRenderTimer);
+            window.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
