@@ -16,6 +16,8 @@ export interface ChatMessage {
     isStreaming?: boolean;
     thinkingContent?: string;
     isError?: boolean;
+    /** Error message text (e.g., "401 invalid access token") */
+    error?: string;
     /** True if this user message was sent as a steering interrupt */
     isSteering?: boolean;
     /** Pi's internal entry ID, used for fork/session operations */

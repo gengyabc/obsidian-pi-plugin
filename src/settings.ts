@@ -1,8 +1,9 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
 import { Platform } from "obsidian";
 import type PiPlugin from "./main";
 import { t } from "./i18n/index";
-import { loadPiModelsConfig, getProviderInfo, getRequiredEnvVars } from "./pi-config";
+
+import { readPiModelsConfig, getProviderEnvVarName, getProviderModels, ProviderInfo, ModelInfo, readProviders } from "./pi-config-reader";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
@@ -116,14 +117,6 @@ export class PiSettingTab extends PluginSettingTab {
             );
 
         this.createProviderModelSettings(containerEl);
-
-        // API keys section - uses SecretStorage
-        this.createApiKeySettings(containerEl);
-
-        // Platform-specific help sections
-        if (Platform.isDesktop) {
-            this.createPlatformHelpSections(containerEl);
-        }
     }
 
     private createPiBinaryPathSetting(containerEl: HTMLElement): void {
@@ -139,6 +132,21 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        // Pi path instructions
+        if (Platform.isMacOS) {
+            for (const step of [t("settings.help.macosPi.step1"), t("settings.help.macosPi.step2"), t("settings.help.macosPi.step3"), t("settings.help.macosPi.step4")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        } else if (Platform.isWin) {
+            for (const step of [t("settings.help.windowsPi.step1"), t("settings.help.windowsPi.powershell"), t("settings.help.windowsPi.cmd"), t("settings.help.windowsPi.step3"), t("settings.help.windowsPi.step4")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        } else if (Platform.isLinux) {
+            for (const step of [t("settings.help.linuxPi.step1"), t("settings.help.linuxPi.step2")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        }
     }
 
     private createNodePathSetting(containerEl: HTMLElement): void {
@@ -154,243 +162,241 @@ export class PiSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        // Node path instructions
+        if (Platform.isMacOS) {
+            for (const step of [t("settings.help.macosNode.step1"), t("settings.help.macosNode.step2"), t("settings.help.macosNode.step3"), t("settings.help.macosNode.step4")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        } else if (Platform.isWin) {
+            for (const step of [t("settings.help.windowsNode.step1"), t("settings.help.windowsNode.powershell"), t("settings.help.windowsNode.cmd"), t("settings.help.windowsNode.step3"), t("settings.help.windowsNode.step4"), t("settings.help.windowsNode.step5")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        } else if (Platform.isLinux) {
+            for (const step of [t("settings.help.linuxNode.step1"), t("settings.help.linuxNode.step2")]) {
+                containerEl.createEl("p", { text: step, cls: "setting-item-description" });
+            }
+        }
     }
 
-    private createProviderModelSettings(containerEl: HTMLElement): void {
-        const piConfig = loadPiModelsConfig();
 
-        if (!piConfig) {
-            const noConfigDiv = containerEl.createDiv({ cls: "setting-item-description" });
-            noConfigDiv.setText(t("settings.apiKeys.noConfig"));
-            return;
+
+    private createProviderModelSettings(containerEl: HTMLElement): void {
+        // Read Pi's models.json to get available providers
+        const { providers, error } = readPiModelsConfig();
+
+        // Show error notice if config exists but failed to parse
+        if (error) {
+            new Notice(error, 5000);
         }
 
-        const providerNames = Object.keys(piConfig.providers);
-        const selectedProvider = this.plugin.settings.defaultProvider;
-        const selectedModel = this.plugin.settings.defaultModel;
-
-        // Get models for selected provider
-        const getModelsForProvider = (providerName: string): string[] => {
-            const providerConfig = piConfig.providers[providerName];
-            if (!providerConfig?.models) return [];
-            return providerConfig.models.map((m) => m.id);
-        };
-
-        const modelsForSelectedProvider = selectedProvider ? getModelsForProvider(selectedProvider) : [];
-
-        // Provider dropdown
-        new Setting(containerEl)
+        // Provider dropdown with env var hint and quick-add button
+        const providerSetting = new Setting(containerEl)
             .setName(t("settings.defaultProvider.name"))
-            .setDesc(t("settings.defaultProvider.desc"))
-            .addDropdown((dropdown) => {
-                // Add empty option at top
+            .setDesc(t("settings.defaultProvider.desc"));
+
+        // Container for env var hint + add button
+        const envVarContainerEl = containerEl.createDiv({ cls: "pi-env-var-container" });
+        const envVarHintEl = envVarContainerEl.createDiv({ cls: "setting-item-description pi-env-var-hint" });
+        envVarContainerEl.hide();
+
+        if (providers.length > 0) {
+            providerSetting.addDropdown((dropdown) => {
+                // Add empty option first
                 dropdown.addOption("", t("settings.defaultProvider.placeholder"));
-                // Add all providers
-                for (const providerName of providerNames) {
-                    dropdown.addOption(providerName, providerName);
+                // Add all providers from Pi's config
+                for (const provider of providers) {
+                    dropdown.addOption(provider.name, provider.name);
                 }
-                dropdown.setValue(selectedProvider);
+                dropdown.setValue(this.plugin.settings.defaultProvider);
                 dropdown.onChange(async (value) => {
                     this.plugin.settings.defaultProvider = value;
-                    // Auto-select first model for new provider
-                    if (value) {
-                        const models = getModelsForProvider(value);
-                        if (models.length > 0) {
-                            this.plugin.settings.defaultModel = models[0];
-                        } else {
-                            this.plugin.settings.defaultModel = "";
-                        }
-                    } else {
-                        this.plugin.settings.defaultModel = "";
-                    }
                     await this.plugin.saveSettings();
-                    // Re-check API keys and refresh UI
-                    this.plugin.checkMissingApiKeys();
-                    this.display(); // Refresh to update model dropdown and API key status
+
+                    // Update env var hint and add button
+                    this.updateEnvVarHint(envVarContainerEl, envVarHintEl, providers, value);
+
+                    // Refresh to update model dropdown
+                    this.display();
                 });
             });
 
-        // Model dropdown - populated based on selected provider
-        new Setting(containerEl)
+            // Show env var hint for current provider if set
+            if (this.plugin.settings.defaultProvider) {
+                this.updateEnvVarHint(envVarContainerEl, envVarHintEl, providers, this.plugin.settings.defaultProvider);
+            }
+        } else {
+            // Fallback to text field if no providers found
+            providerSetting.addText((text) =>
+                text
+                    .setPlaceholder(t("settings.defaultProvider.placeholder"))
+                    .setValue(this.plugin.settings.defaultProvider)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultProvider = value.trim();
+                        await this.plugin.saveSettings();
+                    })
+            );
+        }
+
+        // Model dropdown for selected provider
+        const modelSetting = new Setting(containerEl)
             .setName(t("settings.defaultModel.name"))
-            .setDesc(t("settings.defaultModel.desc"))
-            .addDropdown((dropdown) => {
-                // Add empty option at top
+            .setDesc(t("settings.defaultModel.desc"));
+
+        const currentProvider = this.plugin.settings.defaultProvider;
+        const models = getProviderModels(providers, currentProvider);
+
+        if (models.length > 0) {
+            modelSetting.addDropdown((dropdown) => {
                 dropdown.addOption("", t("settings.defaultModel.placeholder"));
-                // Add models for selected provider
-                if (selectedProvider && modelsForSelectedProvider.length > 0) {
-                    for (const modelId of modelsForSelectedProvider) {
-                        // Find model name for better display
-                        const providerConfig = piConfig.providers[selectedProvider];
-                        const modelInfo = providerConfig?.models?.find((m) => m.id === modelId);
-                        const displayName = modelInfo?.name || modelId;
-                        dropdown.addOption(modelId, displayName);
-                    }
+                for (const model of models) {
+                    dropdown.addOption(model.id, model.name);
                 }
-                dropdown.setValue(selectedModel);
+                dropdown.setValue(this.plugin.settings.defaultModel);
                 dropdown.onChange(async (value) => {
                     this.plugin.settings.defaultModel = value;
                     await this.plugin.saveSettings();
                 });
             });
-    }
-
-    /**
-     * Create API key input fields using Obsidian's SecretStorage.
-     * Reads required env vars from Pi's models.json and shows password input for each.
-     * Keys are stored securely in system keychain via SecretStorage.
-     * Highlights the key required for the currently selected provider.
-     */
-    private createApiKeySettings(containerEl: HTMLElement): void {
-        new Setting(containerEl).setHeading().setName(t("settings.apiKeys.heading"));
-
-        const piConfig = loadPiModelsConfig();
-
-        if (!piConfig) {
-            const noConfigDiv = containerEl.createDiv({ cls: "setting-item-description" });
-            noConfigDiv.setText(t("settings.apiKeys.noConfig"));
-            return;
-        }
-
-        const providers = getProviderInfo(piConfig);
-        const requiredEnvVars = getRequiredEnvVars(piConfig);
-
-        // Determine which env var is required for selected provider
-        const selectedProvider = this.plugin.settings.defaultProvider;
-        const selectedProviderConfig = selectedProvider ? piConfig.providers[selectedProvider] : null;
-        const requiredEnvVarForSelected = selectedProviderConfig?.apiKey;
-
-        // Info explaining keys are stored securely, plus which key is needed for selected provider
-        const infoDiv = containerEl.createDiv({ cls: "setting-item-description" });
-        if (requiredEnvVarForSelected) {
-            const secretName = `pi-plugin-${requiredEnvVarForSelected.toLowerCase().replace(/_/g, "-")}`;
-            const key = this.app.secretStorage.getSecret(secretName);
-            const hasKey = !!key;
-            infoDiv.setText(t("settings.apiKeys.selectedProviderInfo", {
-                provider: selectedProvider,
-                envVar: requiredEnvVarForSelected,
-                status: hasKey ? t("settings.apiKeys.keySet") : t("settings.apiKeys.keyMissing")
-            }));
         } else {
-            infoDiv.setText(t("settings.apiKeys.info"));
-        }
-
-        // Create password input for each required env var
-        for (const envVar of requiredEnvVars) {
-            const providerNames = providers
-                .filter((p) => p.envVar === envVar)
-                .map((p) => p.name);
-
-            const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-            const existingKey = this.app.secretStorage.getSecret(secretName);
-            const hasKey = !!existingKey;
-            const isRequiredForSelected = envVar === requiredEnvVarForSelected;
-
-            new Setting(containerEl)
-                .setName(isRequiredForSelected ? `${envVar} ✓` : envVar)
-                .setDesc(
-                    hasKey
-                        ? t("settings.apiKeys.usedByStored", { providers: providerNames.join(", ") })
-                        : t("settings.apiKeys.usedBy", { providers: providerNames.join(", ") }),
-                )
-                .addText((text) => {
-                    text
-                        .setPlaceholder(hasKey ? t("settings.apiKeys.enterNew") : t("settings.apiKeys.placeholder"))
-                        .setValue("") // Always show empty for security
-                        .inputEl.type = "password";
-                    text.inputEl.addClass("pi-api-key-input");
-                    
-                    // Highlight the input for selected provider's key
-                    if (isRequiredForSelected) {
-                        text.inputEl.addClass("pi-api-key-required");
-                    }
-                    
-                    text.inputEl.addEventListener("change", () => {
-                        const value = text.inputEl.value;
-                        if (!value) {
-                            return;
-                        }
-
-                        this.storeApiKey(secretName, value, envVar, text);
-                    });
-                })
-                .settingEl.addClass("pi-api-key-setting");
-        }
-
-        // Refresh button to reload providers
-        new Setting(containerEl)
-            .setName(t("settings.apiKeys.refresh"))
-            .setDesc(t("settings.apiKeys.refreshDesc"))
-            .addButton((btn) =>
-                btn
-                    .setIcon("refresh-cw")
-                    .setTooltip(t("settings.apiKeys.refreshTooltip"))
-                    .onClick(() => {
-                        this.display();
+            // Fallback to text field if no models found for provider
+            modelSetting.addText((text) =>
+                text
+                    .setPlaceholder(t("settings.defaultModel.placeholder"))
+                    .setValue(this.plugin.settings.defaultModel)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultModel = value.trim();
+                        await this.plugin.saveSettings();
                     })
             );
+        }
     }
 
-    private storeApiKey(
-        secretName: string,
-        value: string,
-        envVar: string,
-        text: { inputEl: HTMLInputElement; setPlaceholder(value: string): unknown },
+    /** Update env var hint and add button for selected provider */
+    private updateEnvVarHint(
+        containerEl: HTMLElement,
+        hintEl: HTMLElement,
+        providers: ProviderInfo[],
+        providerName: string
     ): void {
-        this.app.secretStorage.setSecret(secretName, value);
-        text.inputEl.value = "";
-        text.setPlaceholder(t("settings.apiKeys.keyStored"));
-        new Notice(t("notices.keyStored", { envVar }));
+        // Clear previous content
+        hintEl.empty();
+
+        // Get or create button element (reuse if exists)
+        let btnEl = containerEl.querySelector(".pi-env-var-add-btn") as HTMLButtonElement | null;
+        if (!btnEl) {
+            btnEl = containerEl.createEl("button", {
+                cls: "pi-env-var-add-btn",
+                attr: {
+                    "aria-label": t("settings.apiKeys.add.aria"),
+                    "data-tooltip-position": "top"
+                }
+            });
+        }
+
+        const envVarName = getProviderEnvVarName(providers, providerName);
+        if (envVarName) {
+            // Check if key is already configured
+            const secretName = `pi-plugin-${envVarName.toLowerCase().replace(/_/g, "-")}`;
+            const key = this.app.secretStorage?.getSecret(secretName);
+            const hasKey = !!key;
+
+            hintEl.setText(t("settings.apiKeys.envVarHint", { envVar: envVarName }));
+
+            // Update button state
+            if (hasKey) {
+                btnEl.setText(t("settings.apiKeys.keyStored"));
+                btnEl.disabled = true;
+            } else {
+                btnEl.setText(t("settings.apiKeys.add.name"));
+                btnEl.disabled = false;
+                // Remove old listeners and add new one
+                btnEl.onclick = () => {
+                    this.showApiKeyModal(envVarName, secretName);
+                };
+            }
+
+            containerEl.show();
+        } else {
+            containerEl.hide();
+        }
+    }
+
+    private showApiKeyModal(envVar: string, secretName: string): void {
+        const modal = new ApiKeyModal(this.app, envVar, (name: string, value: string) => {
+            void this.storeApiKey(name, value);
+        });
+        modal.open();
+    }
+
+    private async storeApiKey(name: string, value: string): Promise<void> {
+        const secretName = `pi-plugin-${name.toLowerCase().replace(/_/g, "-")}`;
+        this.app.secretStorage?.setSecret(secretName, value);
+
+        new Notice(t("notices.keyStored", { envVar: name }));
         void this.plugin.reconnectAfterKeyChange();
         this.display();
     }
+}
 
-    private createPlatformHelpSections(containerEl: HTMLElement): void {
-        // macOS help
-        if (Platform.isMacOS) {
-            const macOSDiv = containerEl.createDiv({ cls: "pi-platform-help" });
-            macOSDiv.createEl("strong", { text: t("settings.help.macosPi.title") });
+/**
+ * Modal for adding/updating API key value.
+ */
+class ApiKeyModal extends Modal {
+    private envVar: string;
+    private onSave: (name: string, value: string) => void;
+    private valueInput: HTMLInputElement;
 
-            const steps = [
-                t("settings.help.macosPi.step1"),
-                t("settings.help.macosPi.step2"),
-                t("settings.help.macosPi.step3"),
-                t("settings.help.macosPi.step4"),
-            ];
+    constructor(app: import('obsidian').App, envVar: string, onSave: (name: string, value: string) => void) {
+        super(app);
+        this.envVar = envVar;
+        this.onSave = onSave;
+    }
 
-            for (const step of steps) {
-                macOSDiv.createEl("p", { text: step, cls: "setting-item-description" });
-            }
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.createEl('h3', { text: t('settings.apiKeys.modal.edit') });
+
+        // Value input (password)
+        new Setting(contentEl)
+            .setName(t('settings.apiKeys.modal.value'))
+            .addText((text) => {
+                text
+                    .setPlaceholder(t('settings.apiKeys.modal.valuePlaceholder'))
+                    .setValue('');
+                text.inputEl.type = 'password';
+                this.valueInput = text.inputEl;
+                // Enable keyboard submit (Enter key)
+                text.inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.saveAndClose();
+                    }
+                });
+            });
+
+        // Save button
+        new Setting(contentEl)
+            .addButton((btn) =>
+                btn
+                    .setButtonText(t('settings.apiKeys.modal.save'))
+                    .setCta()
+                    .onClick(() => this.saveAndClose())
+            );
+    }
+
+    private saveAndClose(): void {
+        const value = this.valueInput.value;
+        if (!value) {
+            new Notice(t('settings.apiKeys.modal.empty'));
+            return;
         }
+        this.onSave(this.envVar, value);
+        this.close();
+    }
 
-        // Windows help
-        if (Platform.isWin) {
-            const winDiv = containerEl.createDiv({ cls: "pi-platform-help" });
-            winDiv.createEl("strong", { text: t("settings.help.windowsPi.title") });
-
-            const steps = [
-                t("settings.help.windowsPi.step1"),
-                t("settings.help.windowsPi.powershell"),
-                t("settings.help.windowsPi.cmd"),
-                t("settings.help.windowsPi.step3"),
-                t("settings.help.windowsPi.step4"),
-            ];
-
-            for (const step of steps) {
-                winDiv.createEl("p", { text: step, cls: "setting-item-description" });
-            }
-        }
-
-        // Linux help
-        if (Platform.isLinux) {
-            const linuxDiv = containerEl.createDiv({ cls: "pi-platform-help" });
-            linuxDiv.createEl("strong", { text: t("settings.help.linuxPi.title") });
-
-            const steps = [t("settings.help.linuxPi.step1"), t("settings.help.linuxPi.step2")];
-
-            for (const step of steps) {
-                linuxDiv.createEl("p", { text: step, cls: "setting-item-description" });
-            }
-        }
+    onClose(): void {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }

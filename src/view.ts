@@ -104,7 +104,7 @@ export class PiChatView extends ItemView {
     private streamingComponent: Component | null = null;
 
     /** Debounce timer for live markdown re-rendering during streaming */
-    private streamRenderTimer: number | null = null;
+    private streamRenderTimer: ReturnType<typeof activeWindow.setTimeout> | null = null;
 
     /** Latest streamed content waiting to be rendered */
     private pendingStreamContent: string | null = null;
@@ -212,7 +212,7 @@ export class PiChatView extends ItemView {
         this.streamHandler.reset();
         this.removeThinkingIndicator();
         if (this.streamRenderTimer) {
-            window.clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -309,7 +309,7 @@ export class PiChatView extends ItemView {
             this.streamHandler.handleEvent(event);
             if (event.type === "agent_end") {
                 void this.refreshHeader();
-                window.setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     void this.syncForkStateAfterAgentEnd();
                 }, 0);
             }
@@ -319,7 +319,7 @@ export class PiChatView extends ItemView {
         this.commandSuggest.setConnection(conn);
 
         // Initial header refresh + restore last session after connection
-        window.setTimeout(() => {
+        activeWindow.setTimeout(() => {
             void this.refreshHeader();
             void this.restoreSession();
         }, 1000);
@@ -1565,7 +1565,7 @@ export class PiChatView extends ItemView {
 
         // Clear any pending stream content and timers
         if (this.streamRenderTimer) {
-            window.clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1757,7 +1757,7 @@ export class PiChatView extends ItemView {
             // Schedule debounced markdown re-render
             this.pendingStreamContent = msg.content;
             if (!this.streamRenderTimer) {
-                this.streamRenderTimer = window.setTimeout(() => {
+                this.streamRenderTimer = activeWindow.setTimeout(() => {
                     this.streamRenderTimer = null;
                     this.renderStreamingMarkdown();
                 }, 100);
@@ -1839,7 +1839,7 @@ export class PiChatView extends ItemView {
 
         // Cancel any pending debounced render
         if (this.streamRenderTimer) {
-            window.clearTimeout(this.streamRenderTimer);
+            activeWindow.clearTimeout(this.streamRenderTimer);
             this.streamRenderTimer = null;
         }
         this.pendingStreamContent = null;
@@ -1940,6 +1940,7 @@ export class PiChatView extends ItemView {
                         "",
                         this,
                         msg.thinkingContent,
+                        msg.error,
                     );
                     break;
                 case "tool":

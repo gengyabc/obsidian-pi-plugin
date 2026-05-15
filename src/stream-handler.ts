@@ -248,6 +248,16 @@ export class StreamHandler {
         }
         this.currentMessage.content = this.currentText;
 
+        // Check for error message in the message (e.g., API auth errors)
+        const message = event.message as Record<string, unknown> | undefined;
+        if (message && message.errorMessage) {
+            this.currentMessage.error = String(message.errorMessage);
+            // Also show error notice to user
+            if (this.callbacks.onError) {
+                this.callbacks.onError(String(message.errorMessage));
+            }
+        }
+
         // Use accumulated thinking from streaming deltas if available.
         // Fall back to extracting thinking from the message_end event's
         // complete message object — some models/providers don't stream

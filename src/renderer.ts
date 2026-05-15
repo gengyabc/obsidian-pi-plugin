@@ -40,10 +40,18 @@ export class MessageRenderer {
         sourcePath: string,
         component: Component,
         thinkingContent?: string,
+        error?: string,
     ): HTMLElement {
         const wrapper = container.createDiv({ cls: "pi-message pi-message-assistant" });
         const label = wrapper.createDiv({ cls: "pi-message-label" });
         label.createSpan({ text: "Pi", cls: "pi-message-label-text" });
+
+        // Error message (if API error occurred)
+        if (error) {
+            const errorEl = wrapper.createDiv({ cls: "pi-message-error" });
+            errorEl.createEl("strong", { text: t("renderer.errorLabel") });
+            errorEl.createSpan({ text: error });
+        }
 
         // Thinking block (collapsed) goes before the response text
         if (thinkingContent) {

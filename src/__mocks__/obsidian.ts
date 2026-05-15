@@ -11,6 +11,14 @@ export const Platform = {
 
 export class App {}
 export class PluginSettingTab {}
+export class Modal {
+    constructor(_app: App) {}
+    open(): void {}
+    close(): void {}
+    onOpen(): void {}
+    onClose(): void {}
+    contentEl = { createEl: () => {}, empty: () => {} };
+}
 export class Setting {
     constructor(_containerEl: HTMLElement) {}
     setName(_name: string): this { return this; }

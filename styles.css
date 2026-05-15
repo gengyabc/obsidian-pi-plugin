@@ -5,8 +5,43 @@
 .pi-attachments.is-hidden,
 .pi-abort-btn.is-hidden,
 .pi-header-model.is-hidden,
-.pi-header-cwd.is-hidden {
+.pi-header-cwd.is-hidden,
+.pi-env-var-container.is-hidden {
     display: none !important;
+}
+
+/* Env var hint container for provider dropdown */
+.pi-env-var-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--background-secondary);
+    border-radius: var(--radius-s);
+}
+
+.pi-env-var-hint {
+    flex: 1;
+    color: var(--text-muted);
+}
+
+.pi-env-var-add-btn {
+    padding: 4px 12px;
+    font-size: var(--font-ui-small);
+    border-radius: var(--radius-s);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    cursor: pointer;
+}
+
+.pi-env-var-add-btn:hover:not(:disabled) {
+    background: var(--interactive-accent-hover);
+}
+
+.pi-env-var-add-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* Platform help spacing */
@@ -377,6 +412,20 @@
     padding: 4px 0;
 }
 
+/* Assistant message error display */
+.pi-message-assistant .pi-message-error {
+    background: var(--background-modifier-error);
+    color: var(--text-error);
+    padding: 8px 12px;
+    border-radius: var(--radius-s);
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.pi-message-assistant .pi-message-error strong {
+    color: var(--text-error);
+}
+
 /* Tighten markdown spacing inside assistant messages */
 .pi-message-assistant .pi-message-content > *:first-child {
     margin-top: 0;
@@ -667,7 +716,8 @@
     transition: opacity 120ms ease;
 }
 
-.pi-message-user:hover .pi-message-actions {
+.pi-message-user:hover .pi-message-actions,
+.pi-message-user:focus-within .pi-message-actions {
     opacity: 1;
 }
 

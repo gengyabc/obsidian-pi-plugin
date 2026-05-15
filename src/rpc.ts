@@ -117,7 +117,6 @@ interface PendingRequest {
 export class PiConnection {
     private piBinaryPath: string;
     private nodePath: string;
-    private envVars: string[];
     private apiKeys: Record<string, string>;  // envVarName -> key
     private cwd: string;
     private extraArgs: string[];
@@ -136,7 +135,6 @@ export class PiConnection {
         cwd: string,
         extraArgs: string[] = [],
         nodePath: string = "",
-        envVars: string = "",
         apiKeys: Record<string, string> = {},
         timeout: number = 60_000
     ) {
@@ -144,17 +142,11 @@ export class PiConnection {
         this.cwd = cwd;
         this.extraArgs = extraArgs;
         this.nodePath = nodePath;
-        this.envVars = envVars ? envVars.split(',').map(v => v.trim()).filter(Boolean) : [];
         this.apiKeys = apiKeys;
         this.timeout = timeout;
     }
 
-    /**
-     * Update API keys after construction (used for async secret retrieval).
-     */
-    setApiKeys(keys: Record<string, string>): void {
-        this.apiKeys = keys;
-    }
+
 
     /**
      * Spawn the Pi process and set up JSON line parsing on stdout.
@@ -188,17 +180,11 @@ export class PiConnection {
             enhancedPath = [...new Set([...nodePaths, ...currentPath.split(":")])].join(":");
         }
 
-        // Build env object, checking for required env vars
-        const env: Record<string, string> = { ...process.env, PATH: enhancedPath };
-        for (const varName of this.envVars) {
-            if (process.env[varName]) {
-                env[varName] = process.env[varName]!;
-            } else {
-                console.warn(`[Pi RPC] Env var ${varName} not found in process.env.`);
-            }
-        }
+        // Build minimal env object - only PATH + user-configured API keys
+        // Do NOT copy process.env wholesale (avoids identity fingerprinting warning)
+        const env: Record<string, string> = { PATH: enhancedPath };
 
-        // Pass API keys as env vars (envVarName -> key mapping from SecretStorage)
+        // Pass API keys as env vars (from SecretStorage)
         for (const [envVarName, key] of Object.entries(this.apiKeys)) {
             if (key && key.trim()) {
                 env[envVarName] = key;
@@ -212,6 +198,9 @@ export class PiConnection {
         });
 
         this.connected = true;
+
+        // Buffer stderr to log on exit (helps diagnose fast crashes)
+        const stderrBuffer: string[] = [];
 
         // Parse JSON lines from stdout
         if (this.process.stdout) {
@@ -234,10 +223,12 @@ export class PiConnection {
             });
         }
 
-        // Log stderr for debugging
+        // Log stderr for debugging and buffer it
         if (this.process.stderr) {
             this.process.stderr.on("data", (data: Buffer) => {
-                console.warn("[Pi RPC] stderr:", data.toString());
+                const text = data.toString();
+                stderrBuffer.push(text);
+                console.warn("[Pi RPC] stderr:", text);
             });
         }
 
@@ -245,14 +236,16 @@ export class PiConnection {
         this.process.on("exit", (code: number | null, signal: string | null) => {
             // Suppress error if intentionally destroyed (e.g., reconnecting after API key change)
             if (this.intentionallyDestroyed) {
-                // eslint-disable-next-line obsidianmd/rule-custom-message -- Intentional debug logging for connection lifecycle
-                console.log("[Pi RPC] Process exited (intentional destroy), code", code, "signal", signal);
                 this.connected = false;
                 this.cleanup();
                 return;
             }
+            // Log exit info with any buffered stderr
             if (code !== 0) {
                 console.warn("[Pi RPC] Process exited with code", code, "signal", signal);
+                if (stderrBuffer.length > 0) {
+                    console.warn("[Pi RPC] stderr output:", stderrBuffer.join(""));
+                }
             }
             this.connected = false;
             this.dispatch({
@@ -264,6 +257,10 @@ export class PiConnection {
 
         this.process.on("error", (err: Error) => {
             this.connected = false;
+            console.error("[Pi RPC] Process error:", err.message);
+            if (stderrBuffer.length > 0) {
+                console.error("[Pi RPC] stderr output:", stderrBuffer.join(""));
+            }
             this.dispatch({
                 type: "error",
                 error: `Pi process error: ${err.message}`,

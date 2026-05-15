@@ -12,7 +12,7 @@ import type { PiCommand } from "./commands";
 import { MessageStore } from "./message-store";
 import type { MessageStoreData } from "./message-store";
 import { t } from "./i18n/index";
-import { loadPiModelsConfig, getRequiredEnvVars, getDefaultProviderAndModel } from "./pi-config";
+
 
 interface ModelOption {
     id: string;
@@ -66,14 +66,11 @@ export default class PiPlugin extends Plugin {
     /** IDs of dynamically registered Pi commands (for cleanup on re-registration) */
     private dynamicCommandIds: string[] = [];
     /** Debounce timer for message store persistence */
-    private storeFlushTimer: number | null = null;
+    private storeFlushTimer: ReturnType<typeof activeWindow.setTimeout> | null = null;
 
     async onload(): Promise<void> {
         await this.loadSettings();
         await this.loadMessageStore();
-
-        // Auto-select default provider/model if not set
-        await this.autoSelectDefaults();
 
         this.addSettingTab(new PiSettingTab(this.app, this));
 
@@ -131,8 +128,6 @@ export default class PiPlugin extends Plugin {
         const statusBarEl = this.addStatusBarItem();
         this.statusBar = new PiStatusBar(this, statusBarEl);
 
-        // Check for missing API keys (async - don't block onload)
-        void this.checkMissingApiKeys();
     }
 
     onunload(): void {
@@ -145,7 +140,7 @@ export default class PiPlugin extends Plugin {
         // Flush message store (best-effort, silent)
         void this.flushMessageStore().catch(() => {});
         if (this.storeFlushTimer) {
-            window.clearTimeout(this.storeFlushTimer);
+            activeWindow.clearTimeout(this.storeFlushTimer);
             this.storeFlushTimer = null;
         }
 
@@ -337,7 +332,7 @@ export default class PiPlugin extends Plugin {
      */
     scheduleStoreFlush(): void {
         if (this.storeFlushTimer) return;
-        this.storeFlushTimer = window.setTimeout(() => {
+        this.storeFlushTimer = activeWindow.setTimeout(() => {
             this.storeFlushTimer = null;
             void this.flushMessageStore().catch(() => {});
         }, 2000);
@@ -368,11 +363,10 @@ export default class PiPlugin extends Plugin {
 
     /**
      * Get or create a PiConnection using current settings.
-     * Async because API keys must be loaded from SecretStorage.
      */
-    ensureConnection(): Promise<PiConnection> {
+    ensureConnection(): PiConnection {
         if (this.connection && this.connection.isConnected()) {
-            return Promise.resolve(this.connection);
+            return this.connection;
         }
 
         // Destroy old dead connection if it exists
@@ -381,12 +375,12 @@ export default class PiPlugin extends Plugin {
             this.connection = null;
         }
 
-        // Load API keys from SecretStorage
+        // Load API keys from SecretStorage (synchronous)
         const apiKeys = this.loadApiKeys();
 
         // Create connection with loaded keys
         this.createConnection(apiKeys);
-        return Promise.resolve(this.connection!);
+        return this.connection!;
     }
 
     /**
@@ -394,14 +388,21 @@ export default class PiPlugin extends Plugin {
      */
     private loadApiKeys(): Record<string, string> {
         const apiKeys: Record<string, string> = {};
-        const piConfig = loadPiModelsConfig();
-        if (piConfig) {
-            const requiredEnvVars = getRequiredEnvVars(piConfig);
-            for (const envVar of requiredEnvVars) {
-                const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-                const key = this.app.secretStorage.getSecret(secretName);
+        // Load keys stored via the provider-specific quick-add button
+        // These are stored with secret names like: pi-plugin-anthropic-api-key
+        // Note: listSecrets() requires Obsidian 1.7.2+, but optional chaining gracefully
+        // handles older versions by returning an empty array (no keys auto-loaded).
+        const secretKeys = this.app.secretStorage?.listSecrets?.() || [];
+        for (const secretName of secretKeys) {
+            if (secretName.startsWith("pi-plugin-")) {
+                const key = this.app.secretStorage?.getSecret(secretName);
                 if (key) {
-                    apiKeys[envVar] = key;
+                    // Convert secret name back to env var name (e.g., pi-plugin-anthropic-api-key -> ANTHROPIC_API_KEY)
+                    const envVarName = secretName
+                        .replace("pi-plugin-", "")
+                        .replace(/-/g, "_")
+                        .toUpperCase();
+                    apiKeys[envVarName] = key;
                 }
             }
         }
@@ -410,7 +411,6 @@ export default class PiPlugin extends Plugin {
 
     /**
      * Create a PiConnection and set up event handlers.
-     * Shared between ensureConnection() and reconnectAfterKeyChange().
      */
     private createConnection(apiKeys: Record<string, string>): void {
         // Determine working directory: setting, or parent of vault root
@@ -433,13 +433,12 @@ export default class PiPlugin extends Plugin {
         }
 
         try {
-            // Create connection - API keys passed as env vars
+            // Create connection
             this.connection = new PiConnection(
                 this.settings.piBinaryPath,
                 cwd,
                 args,
                 this.settings.nodePath,
-                this.settings.envVars,
                 apiKeys,
                 this.settings.rpcTimeout
             );
@@ -472,7 +471,7 @@ export default class PiPlugin extends Plugin {
             });
 
             // Refresh status bar and register commands once connected
-            window.setTimeout(() => {
+            activeWindow.setTimeout(() => {
                 const statusBar = this.statusBar;
                 if (statusBar) {
                     void statusBar.refreshModel();
@@ -571,7 +570,7 @@ export default class PiPlugin extends Plugin {
             this.connection = null;
         }
 
-        // Load API keys from SecretStorage
+        // Load API keys from SecretStorage (synchronous)
         const apiKeys = this.loadApiKeys();
 
         // Create new connection with loaded keys
@@ -583,58 +582,4 @@ export default class PiPlugin extends Plugin {
         }
     }
 
-    /**
-     * Auto-select default provider and model from Pi's config if not already set.
-     * If provider is set but model isn't, use first model from that provider.
-     */
-    async autoSelectDefaults(): Promise<void> {
-        // If user already set provider/model, don't override
-        if (this.settings.defaultProvider && this.settings.defaultModel) return;
-
-        const piConfig = loadPiModelsConfig();
-        if (!piConfig) return;  // No config available
-
-        // If provider is set but model isn't, use first model from that provider
-        if (this.settings.defaultProvider && !this.settings.defaultModel) {
-            const providerConfig = piConfig.providers[this.settings.defaultProvider];
-            if (providerConfig?.models?.length > 0) {
-                this.settings.defaultModel = providerConfig.models[0].id;
-                await this.saveSettings();
-            }
-            return;
-        }
-
-        // Neither provider nor model set - use first provider and its first model
-        const defaults = getDefaultProviderAndModel(piConfig);
-        if (!defaults) return;  // No providers available
-
-        this.settings.defaultProvider = defaults.provider;
-        this.settings.defaultModel = defaults.model;
-
-        // Save the auto-selected defaults
-        await this.saveSettings();
-    }
-
-    /**
-     * Check for missing API keys based on the selected provider.
-     * Shows error if the provider's API key is not set in SecretStorage.
-     */
-    checkMissingApiKeys(): void {
-        const piConfig = loadPiModelsConfig();
-        if (!piConfig) return;  // No config file, nothing to check
-
-        // Get the provider config
-        const providerName = this.settings.defaultProvider;
-        if (!providerName) return;  // No provider set
-
-        const providerConfig = piConfig.providers[providerName];
-        if (!providerConfig?.apiKey) return;  // Provider doesn't need API key
-
-        const envVar = providerConfig.apiKey;
-        const secretName = `pi-plugin-${envVar.toLowerCase().replace(/_/g, "-")}`;
-        const key = this.app.secretStorage.getSecret(secretName);
-        if (!key) {
-            showCriticalNotice(t("notices.missingApiKeys", { keys: envVar }));
-        }
-    }
 }
