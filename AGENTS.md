@@ -47,4 +47,4 @@ See `.pi/rules/` for detailed conventions:
 - **obsidian-patterns.md** — Use when adding new UI components, settings, commands, RPC events, or working with Obsidian Plugin API
 - **stable-apis.md** — Use when modifying ChatMessage interface, PiConnection methods, StreamHandler callbacks, or PiPluginSettings fields
 - **workflow.md** — Use before making changes, after completing changes, or when unsure about the change process or validation steps
-- **graphify-usage.md** — Use when exploring unfamiliar repos, architecture review, cross-file refactor, or dependency/call-chain tracing
+- **graphify-usage.md** — Use Graphify as an orientation tool for unfamiliar repos, architecture review, cross-file refactors, dependency/call-chain tracing, or command/workflow/skill/plugin wiring. Do not use it as a default step for small localized edits.
