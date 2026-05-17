@@ -22,9 +22,13 @@ data.json
 .idea/
 .vscode/
 
+# links
+.pi/skills/obsidian
+
 # Logs
 *.log
 npm-debug.log*
 
-# pi
-.pi
+# graphify-out
+graphify-out/
+.graphify_detect.json
