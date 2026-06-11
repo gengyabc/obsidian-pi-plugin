@@ -293,8 +293,12 @@ export class PiChatView extends ItemView {
 
     /**
      * Wire this view to a PiConnection's event stream.
+     *
+     * Synchronous: just installs handlers and schedules a deferred refresh.
+     * Kept as a regular method (not async) so the function shape doesn't lie
+     * about doing async work and satisfies @typescript-eslint/require-await.
      */
-    async connectToRpc(): Promise<void> {
+    connectToRpc(): void {
         const conn = this.plugin.ensureConnection();
         if (this.rpcEventHandler) {
             conn.offEvent(this.rpcEventHandler);
@@ -1446,24 +1450,16 @@ export class PiChatView extends ItemView {
         }
 
         try {
-            conn.send(command)
-                .then(() => {
-                    if (shouldClearReturnCheckpoint) {
-                        this.resetRewindState();
-                    }
-                })
-                .catch((err) => {
-                    console.error("[Pi Chat] Failed to send message:", err);
-                    showCriticalNotice(t("notices.sendFailed"));
-                    this.removeThinkingIndicator();
-                    if (!isSteering) {
-                        this.setStreamingState(false);
-                    }
-                });
-
-            // Show thinking indicator while waiting for Pi's response
+            // Show thinking indicator while waiting for Pi's response.
+            // Posted before await so the user sees feedback immediately.
             if (!isSteering) {
                 this.showThinkingIndicator();
+            }
+
+            await conn.send(command);
+
+            if (shouldClearReturnCheckpoint) {
+                this.resetRewindState();
             }
         } catch (err) {
             console.error("[Pi Chat] Failed to send message:", err);

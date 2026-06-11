@@ -13,6 +13,9 @@
     "keywords": [],
     "author": "Geng",
     "license": "MIT",
+    "dependencies": {
+        "json5": "^2.2.3"
+    },
     "devDependencies": {
         "@eslint/json": "^0.14.0",
         "@types/node": "^20.11.0",

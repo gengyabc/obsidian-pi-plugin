@@ -14,6 +14,7 @@ import { Platform } from "obsidian";
 let fs: typeof import("fs");
 let os: typeof import("os");
 let path: typeof import("path");
+let JSON5: { parse(text: string): unknown };
 
 if (Platform.isDesktop) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop
@@ -22,6 +23,8 @@ if (Platform.isDesktop) {
     os = require("os") as typeof import("os");
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop
     path = require("path") as typeof import("path");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Use JSON5 to match Pi's own config parser (supports trailing commas, comments)
+    JSON5 = require("json5") as { parse(text: string): unknown };
 }
 
 /** Model definition from Pi's models.json */
@@ -93,7 +96,7 @@ export function readPiModelsConfig(projectPath?: string): { providers: ProviderI
         if (fs.existsSync(userModelsPath)) {
             configExists = true;
             const content = fs.readFileSync(userModelsPath, "utf-8");
-            const userConfig = JSON.parse(content) as PiModelsJson;
+            const userConfig = JSON5.parse(content) as PiModelsJson;
             if (userConfig.providers) {
                 Object.assign(providers, userConfig.providers);
             }
@@ -110,7 +113,7 @@ export function readPiModelsConfig(projectPath?: string): { providers: ProviderI
             if (fs.existsSync(projectModelsPath)) {
                 configExists = true;
                 const content = fs.readFileSync(projectModelsPath, "utf-8");
-                const projectConfig = JSON.parse(content) as PiModelsJson;
+                const projectConfig = JSON5.parse(content) as PiModelsJson;
                 if (projectConfig.providers) {
                     // Project-level overrides user-level for same provider names
                     Object.assign(providers, projectConfig.providers);

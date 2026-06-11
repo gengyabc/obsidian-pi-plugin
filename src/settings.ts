@@ -312,7 +312,7 @@ export class PiSettingTab extends PluginSettingTab {
                 btnEl.disabled = false;
                 // Remove old listeners and add new one
                 btnEl.onclick = () => {
-                    this.showApiKeyModal(envVarName, secretName);
+                    this.showApiKeyModal(envVarName);
                 };
             }
 
@@ -322,15 +322,18 @@ export class PiSettingTab extends PluginSettingTab {
         }
     }
 
-    private showApiKeyModal(envVar: string, secretName: string): void {
+    private showApiKeyModal(envVar: string): void {
         const modal = new ApiKeyModal(this.app, envVar, (name: string, value: string) => {
-            void this.storeApiKey(name, value);
+            this.storeApiKey(name, value);
         });
         modal.open();
     }
 
-    private async storeApiKey(name: string, value: string): Promise<void> {
+    private storeApiKey(name: string, value: string): void {
         const secretName = `pi-plugin-${name.toLowerCase().replace(/_/g, "-")}`;
+        // SecretStorage.setSecret is synchronous as of obsidian 1.11.4
+        // (returns void). Keep this method sync so the lint rule against
+        // async-without-await is satisfied honestly.
         this.app.secretStorage?.setSecret(secretName, value);
 
         new Notice(t("notices.keyStored", { envVar: name }));
