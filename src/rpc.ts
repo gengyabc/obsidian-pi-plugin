@@ -192,6 +192,7 @@ export class PiConnection {
         }
 
         this.process = spawn(this.piBinaryPath, ["--mode", "rpc", ...this.extraArgs], {
+            shell: true, // Needed for non-ASCII (e.g., Chinese) characters in binary path
             cwd: this.cwd,
             stdio: ["pipe", "pipe", "pipe"],
             env,
