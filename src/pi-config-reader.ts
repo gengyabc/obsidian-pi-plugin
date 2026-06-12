@@ -140,9 +140,16 @@ export function readPiModelsConfig(projectPath?: string): { providers: ProviderI
             contextWindow: m.contextWindow,
         }));
 
+        // Pi's models.json conventionally references env vars as "$VAR_NAME"
+        // (shell-style). Strip the leading `$` so downstream consumers see a
+        // raw env var name — both for setting `process.env[name]` (rpc.ts) and
+        // for deriving a SecretStorage ID (settings.ts), which rejects `$`.
+        const rawApiKey = (config.apiKey || "").trim();
+        const envVarName = rawApiKey.startsWith("$") ? rawApiKey.slice(1) : rawApiKey;
+
         result.push({
             name: providerName,
-            envVarName: config.apiKey || "",
+            envVarName,
             baseUrl: config.baseUrl,
             api: config.api,
             models,

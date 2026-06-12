@@ -28,6 +28,7 @@
   "notices.fileReadFailed": "Failed to read the file",
   "notices.fileTooLarge": "File too large ({{size}}MB). Max 1MB.",
   "notices.keyStored": "API key stored: {{envVar}}",
+  "notices.keyStoreFailed": "Failed to store API key for {{envVar}}: {{msg}}",
   "notices.loadFailed": "Failed to load session: {{msg}}",
   "notices.loadedSession": "Loaded session: {{date}}",
   "notices.messagesLoadFailed": "Failed to load messages from Pi",

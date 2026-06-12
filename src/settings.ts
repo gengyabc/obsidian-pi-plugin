@@ -452,22 +452,31 @@ export class PiSettingTab extends PluginSettingTab {
     }
 
     private showApiKeyModal(envVar: string): void {
-        const modal = new ApiKeyModal(this.app, envVar, (name: string, value: string) => {
-            this.storeApiKey(name, value);
+        const modal = new ApiKeyModal(this.app, envVar, (name: string, value: string): boolean => {
+            return this.storeApiKey(name, value);
         });
         modal.open();
     }
 
-    private storeApiKey(name: string, value: string): void {
+    private storeApiKey(name: string, value: string): boolean {
         const secretName = `pi-plugin-${name.toLowerCase().replace(/_/g, "-")}`;
         // SecretStorage.setSecret is synchronous as of obsidian 1.11.4
-        // (returns void). Keep this method sync so the lint rule against
-        // async-without-await is satisfied honestly.
-        this.app.secretStorage?.setSecret(secretName, value);
+        // (returns void). It throws if the id is not lowercase-alphanumeric
+        // with optional dashes — surface that to the user instead of letting
+        // it bubble silently out of the modal's click handler.
+        try {
+            this.app.secretStorage?.setSecret(secretName, value);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[Pi Plugin] Failed to store API key:", err);
+            new Notice(t("notices.keyStoreFailed", { envVar: name, msg }));
+            return false;
+        }
 
         new Notice(t("notices.keyStored", { envVar: name }));
         void this.plugin.reconnectAfterKeyChange();
         this.refreshSettingsTab();
+        return true;
     }
 }
 
@@ -476,10 +485,10 @@ export class PiSettingTab extends PluginSettingTab {
  */
 class ApiKeyModal extends Modal {
     private envVar: string;
-    private onSave: (name: string, value: string) => void;
+    private onSave: (name: string, value: string) => boolean;
     private valueInput: HTMLInputElement;
 
-    constructor(app: import('obsidian').App, envVar: string, onSave: (name: string, value: string) => void) {
+    constructor(app: import('obsidian').App, envVar: string, onSave: (name: string, value: string) => boolean) {
         super(app);
         this.envVar = envVar;
         this.onSave = onSave;
@@ -523,8 +532,9 @@ class ApiKeyModal extends Modal {
             new Notice(t('settings.apiKeys.modal.empty'));
             return;
         }
-        this.onSave(this.envVar, value);
-        this.close();
+        if (this.onSave(this.envVar, value)) {
+            this.close();
+        }
     }
 
     onClose(): void {

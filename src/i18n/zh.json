@@ -27,6 +27,7 @@
   "notices.fileReadFailed": "读取文件失败",
   "notices.fileTooLarge": "文件过大 ({{size}}MB)。最大 1MB。",
   "notices.keyStored": "API 密钥已存储：{{envVar}}",
+  "notices.keyStoreFailed": "无法存储 {{envVar}} 的 API 密钥：{{msg}}",
   "notices.loadFailed": "加载会话失败: {{msg}}",
   "notices.loadedSession": "已加载会话: {{date}}",
   "notices.messagesLoadFailed": "从 Pi 加载消息失败",

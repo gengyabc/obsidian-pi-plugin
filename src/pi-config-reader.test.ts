@@ -107,4 +107,34 @@ describe("readPiModelsConfig — JSON5 parsing", () => {
         expect(error).toBeDefined();
         expect(error).toContain("Failed to read");
     });
+
+    it("strips a leading $ from apiKey (Pi's $VAR_NAME shell-style convention)", () => {
+        // Regression: Pi's models.json conventionally writes apiKey as
+        // "$VOLCANO_API_KEY". The plugin used to pass that string through
+        // verbatim, which (a) put the wrong env var name on the spawned Pi
+        // process and (b) made SecretStorage.setSecret() throw because `$`
+        // is not a legal id char — silently breaking the modal Save button.
+        mockUserConfig(
+            JSON.stringify({
+                providers: {
+                    volcengine: {
+                        apiKey: "$VOLCANO_API_KEY",
+                        models: [{ id: "glm-5.1", name: "glm-5.1" }],
+                    },
+                    plain: {
+                        apiKey: "OPENAI_API_KEY",
+                        models: [],
+                    },
+                },
+            }),
+        );
+
+        const { providers } = readPiModelsConfig();
+
+        const volc = providers.find((p) => p.name === "volcengine");
+        const plain = providers.find((p) => p.name === "plain");
+        expect(volc?.envVarName).toBe("VOLCANO_API_KEY");
+        // Plain (no $) names must pass through unchanged.
+        expect(plain?.envVarName).toBe("OPENAI_API_KEY");
+    });
 });
