@@ -1,16 +1,16 @@
 # Graph Report - obsidian-pi-plugin  (2026-06-11)
 
 ## Corpus Check
-- 25 files · ~21,782 words
+- 26 files · ~22,280 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1203 nodes · 1798 edges · 48 communities (33 shown, 15 thin omitted)
+- 1184 nodes · 1786 edges · 46 communities (31 shown, 15 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 3 edges (avg confidence: 0.75)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a3d616f6`
+- Built from commit: `16ff0c6a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -51,8 +51,6 @@
 - [[_COMMUNITY_Community 34|Community 34]]
 - [[_COMMUNITY_Community 35|Community 35]]
 - [[_COMMUNITY_Community 36|Community 36]]
-- [[_COMMUNITY_Community 37|Community 37]]
-- [[_COMMUNITY_Community 38|Community 38]]
 - [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 41|Community 41]]
@@ -86,7 +84,7 @@
 - **Rewind Feature Design** — rewind_fork_semantics, rewind_return_latest, rewind_entry_id_sync, qa_load_vs_reload [EXTRACTED 0.90]
 - **Plugin Architecture Pattern** — agents_plugin_pattern, agents_event_driven, agents_callbacks_pattern [EXTRACTED 0.95]
 
-## Communities (48 total, 15 thin omitted)
+## Communities (46 total, 15 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
@@ -106,15 +104,15 @@ Nodes (50): activateView(), addAttachment(), appendMessage(), browseSessions(), 
 
 ### Community 5 - "Community 5"
 Cohesion: 0.07
-Nodes (21): getProviderEnvVarName(), getProviderModels(), ModelInfo, PiModelConfig, PiModelsJson, PiProviderConfig, ProviderInfo, readPiModelsConfig() (+13 more)
+Nodes (25): getProviderEnvVarName(), getProviderModels(), ModelInfo, PiModelConfig, PiModelsJson, PiProviderConfig, ProviderInfo, readPiModelsConfig() (+17 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.11
 Nodes (29): buildHeaderBar(), commitSessionNameEdit(), confirmDelete(), connectToRpc(), createConnection(), createNodePathSetting(), createPiBinaryPathSetting(), display() (+21 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.07
-Nodes (20): AgentEndEvent, AgentStartEvent, AssistantMessageEvent, AutoCompactionEndEvent, ChildProcess, childProcessModule, EventHandler, MessageEndEvent (+12 more)
+Cohesion: 0.11
+Nodes (18): AgentEndEvent, AgentStartEvent, AssistantMessageEvent, AutoCompactionEndEvent, ChildProcess, childProcessModule, EventHandler, MessageEndEvent (+10 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.08
@@ -123,10 +121,6 @@ Nodes (6): App, Modal, Platform, PluginSettingTab, SecretComponent, Setting
 ### Community 9 - "Community 9"
 Cohesion: 0.21
 Nodes (13): autoSave(), cleanup(), connect(), destroy(), flushMessageStore(), getActiveView(), hasMessages(), isDirty() (+5 more)
-
-### Community 10 - "Community 10"
-Cohesion: 0.08
-Nodes (24): author, description, devDependencies, esbuild, eslint, @eslint/json, eslint-plugin-obsidianmd, obsidian (+16 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.21
@@ -149,8 +143,8 @@ Cohesion: 0.18
 Nodes (15): buildCurrentMessage(), convertAgentMessage(), exportSession(), extractMessageText(), extractResultText(), extractTextFromMessage(), extractThinkingFromMessage(), generateMessageId() (+7 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.24
-Nodes (9): ChatMessage, generateMessageId(), showCriticalNotice(), StreamCallbacks, ContentBlock, ExtensionUiRequest, ForkMessage, PiStateData (+1 more)
+Cohesion: 0.15
+Nodes (12): AttachmentPicker, Attachment, ChatInputCallbacks, ChatMessage, generateMessageId(), RpcEvent, StreamCallbacks, ContentBlock (+4 more)
 
 ### Community 21 - "Community 21"
 Cohesion: 0.14
@@ -173,16 +167,12 @@ Cohesion: 0.19
 Nodes (6): currentLang, escapeRegex(), LocaleModule, locales, t(), UserMessageActions
 
 ### Community 26 - "Community 26"
-Cohesion: 0.22
-Nodes (5): CommandSuggest, PiCommand, DesktopVaultAdapter, ModelOption, MessageStoreData
-
-### Community 27 - "Community 27"
-Cohesion: 0.17
-Nodes (4): AttachmentPicker, FileSuggestModal, Attachment, ChatInputCallbacks
+Cohesion: 0.16
+Nodes (3): CommandSuggest, CommandSuggestModal, PiCommand
 
 ### Community 30 - "Community 30"
-Cohesion: 0.22
-Nodes (5): buildSessionEntries(), extractPreview(), formatFileDate(), SessionEntry, SessionListModal
+Cohesion: 0.11
+Nodes (10): DesktopVaultAdapter, ModelOption, ModelSwitchModal, MessageStoreData, showCriticalNotice(), buildSessionEntries(), extractPreview(), formatFileDate() (+2 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.24
@@ -205,21 +195,21 @@ Cohesion: 0.67
 Nodes (3): Command Integration, JSON Line Protocol, RPC Mode Communication
 
 ## Knowledge Gaps
-- **639 isolated node(s):** `ChildProcess`, `ReadlineInterface`, `childProcessModule`, `readlineModule`, `EventHandler` (+634 more)
+- **621 isolated node(s):** `fs`, `os`, `path`, `{ providers, error }`, `PiModelConfig` (+616 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PiChatView` connect `Community 4` to `Community 26`, `Community 20`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **Why does `PiChatView` connect `Community 4` to `Community 20`, `Community 30`?**
+  _High betweenness centrality (0.062) - this node is a cross-community bridge._
 - **Why does `sessions` connect `Community 0` to `Community 17`?**
-  _High betweenness centrality (0.034) - this node is a cross-community bridge._
-- **Why does `PiPlugin` connect `Community 12` to `Community 26`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
-- **What connects `ChildProcess`, `ReadlineInterface`, `childProcessModule` to the rest of the system?**
-  _651 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **Why does `PiStatusBar` connect `Community 31` to `Community 25`, `Community 30`?**
+  _High betweenness centrality (0.021) - this node is a cross-community bridge._
+- **What connects `fs`, `os`, `path` to the rest of the system?**
+  _633 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.011428571428571429 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
