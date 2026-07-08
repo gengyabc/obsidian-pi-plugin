@@ -780,8 +780,8 @@ export class PiChatView extends ItemView {
      * Delete a Pi session file.
      */
     private async deleteSession(session: PiSession): Promise<void> {
-        const { unlink } = await import("fs/promises");
-        await unlink(session.path);
+        const fsPromises: typeof import("fs/promises") = await import("fs/promises");
+        await fsPromises.unlink(session.path);
     }
 
     /**
@@ -790,8 +790,8 @@ export class PiChatView extends ItemView {
      */
     private async exportSession(session: PiSession): Promise<void> {
         try {
-            const { readFile } = await import("fs/promises");
-            const content = await readFile(session.path, "utf-8");
+            const fsPromises: typeof import("fs/promises") = await import("fs/promises");
+            const content = await fsPromises.readFile(session.path, "utf-8");
             const lines = content.split("\n").filter((l) => l.trim());
 
             const messages: ChatMessage[] = [];

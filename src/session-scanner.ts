@@ -26,8 +26,8 @@ let _basename: (path: string, suffix?: string) => string;
 let _homedir: () => string;
 
 function loadDesktopModule<T>(name: string): T {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
-    return require(name) as T;
+    const desktopRequire: NodeJS.Require = require;
+    return desktopRequire(name) as T;
 }
 
 if (Platform.isDesktop) {

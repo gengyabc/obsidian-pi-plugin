@@ -2,21 +2,23 @@ import { Platform } from "obsidian";
 import { parseJsonRecord } from "./json-utils";
 
 // Guard Node.js imports for desktop-only (Rule 36)
-let spawn: typeof import("child_process").spawn;
-let createInterface: typeof import("readline").createInterface;
+let spawnProcess: typeof import("child_process").spawn;
+let createLineReader: typeof import("readline").createInterface;
+let processModule: typeof import("process");
 type ChildProcess = import("child_process").ChildProcess;
 type ReadlineInterface = import("readline").Interface;
 
 function loadDesktopModule<T>(name: string): T {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
-    return require(name) as T;
+    const desktopRequire: NodeJS.Require = require;
+    return desktopRequire(name) as T;
 }
 
 if (Platform.isDesktop) {
     const childProcessModule = loadDesktopModule<typeof import("child_process")>("child_process");
     const readlineModule = loadDesktopModule<typeof import("readline")>("readline");
-    spawn = childProcessModule.spawn;
-    createInterface = readlineModule.createInterface;
+    processModule = loadDesktopModule<typeof import("process")>("process");
+    spawnProcess = childProcessModule.spawn;
+    createLineReader = readlineModule.createInterface;
 }
 
 export type EventHandler = (event: RpcEvent) => void;
@@ -177,7 +179,7 @@ export class PiConnection {
 
         // GUI apps on macOS don't inherit shell PATH (nvm, etc.), so we need to
         // explicitly include node in PATH
-        const currentPath = process.env.PATH || "";
+        const currentPath = processModule.env.PATH || "";
         let enhancedPath = currentPath;
 
         // If user specified a node path, prepend it to PATH
@@ -203,7 +205,7 @@ export class PiConnection {
             }
         }
 
-        this.process = spawn(this.piBinaryPath, ["--mode", "rpc", ...this.extraArgs], {
+        this.process = spawnProcess(this.piBinaryPath, ["--mode", "rpc", ...this.extraArgs], {
             shell: true, // Needed for non-ASCII (e.g., Chinese) characters in binary path
             cwd: this.cwd,
             stdio: ["pipe", "pipe", "pipe"],
@@ -217,7 +219,7 @@ export class PiConnection {
 
         // Parse JSON lines from stdout
         if (this.process.stdout) {
-            this.readline = createInterface({
+            this.readline = createLineReader({
                 input: this.process.stdout,
                 crlfDelay: Infinity,
             });

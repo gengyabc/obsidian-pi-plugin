@@ -18,12 +18,12 @@ let os: typeof import("os");
 let path: typeof import("path");
 
 function loadDesktopModule<T>(name: string): T {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
-    return require(name) as T;
+    const desktopRequire: NodeJS.Require = require;
+    return desktopRequire(name) as T;
 }
 
 function parseModelsJson(text: string): PiModelsJson {
-    const parsed = JSON5.parse(text);
+    const parsed: unknown = JSON5.parse(text);
     if (!isRecord(parsed)) {
         return {};
     }

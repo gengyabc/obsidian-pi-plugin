@@ -263,7 +263,8 @@ export class PiSettingTab extends PluginSettingTab {
                 return;
             case "dropdown":
                 setting.addDropdown((dropdown) => {
-                    for (const [optionKey, optionLabel] of Object.entries(control.options)) {
+                    for (const optionKey of Object.keys(control.options)) {
+                        const optionLabel = control.options[optionKey];
                         dropdown.addOption(optionKey, optionLabel);
                     }
                     const current = this.getControlValue(control.key);
