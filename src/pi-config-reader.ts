@@ -9,22 +9,70 @@
  */
 
 import { Platform } from "obsidian";
+import JSON5 from "json5";
+import { isRecord } from "./json-utils";
 
 // Guard Node.js imports for desktop-only (Rule 36)
 let fs: typeof import("fs");
 let os: typeof import("os");
 let path: typeof import("path");
-let JSON5: { parse(text: string): unknown };
+
+function loadDesktopModule<T>(name: string): T {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
+    return require(name) as T;
+}
+
+function parseModelsJson(text: string): PiModelsJson {
+    const parsed = JSON5.parse(text);
+    if (!isRecord(parsed)) {
+        return {};
+    }
+
+    const providersValue = parsed.providers;
+    if (!isRecord(providersValue)) {
+        return {};
+    }
+
+    const providers: Record<string, PiProviderConfig> = {};
+    for (const [providerName, providerValue] of Object.entries(providersValue)) {
+        if (!isRecord(providerValue)) {
+            continue;
+        }
+
+        const modelsValue = providerValue.models;
+        const models = Array.isArray(modelsValue)
+            ? modelsValue.filter(isRecord).map((model) => ({
+                id: typeof model.id === "string" ? model.id : "",
+                name: typeof model.name === "string" ? model.name : "",
+                reasoning: typeof model.reasoning === "boolean" ? model.reasoning : undefined,
+                input: Array.isArray(model.input) ? model.input.filter((item): item is string => typeof item === "string") : undefined,
+                contextWindow: typeof model.contextWindow === "number" ? model.contextWindow : undefined,
+                maxTokens: typeof model.maxTokens === "number" ? model.maxTokens : undefined,
+                cost: isRecord(model.cost) ? {
+                    input: typeof model.cost.input === "number" ? model.cost.input : undefined,
+                    output: typeof model.cost.output === "number" ? model.cost.output : undefined,
+                    cacheRead: typeof model.cost.cacheRead === "number" ? model.cost.cacheRead : undefined,
+                    cacheWrite: typeof model.cost.cacheWrite === "number" ? model.cost.cacheWrite : undefined,
+                } : undefined,
+                compat: isRecord(model.compat) ? model.compat : undefined,
+            })).filter((model) => model.id.length > 0)
+            : undefined;
+
+        providers[providerName] = {
+            baseUrl: typeof providerValue.baseUrl === "string" ? providerValue.baseUrl : undefined,
+            api: typeof providerValue.api === "string" ? providerValue.api : undefined,
+            apiKey: typeof providerValue.apiKey === "string" ? providerValue.apiKey : undefined,
+            models,
+        };
+    }
+
+    return { providers };
+}
 
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs module only available on desktop
-    fs = require("fs") as typeof import("fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js os module only available on desktop
-    os = require("os") as typeof import("os");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop
-    path = require("path") as typeof import("path");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Use JSON5 to match Pi's own config parser (supports trailing commas, comments)
-    JSON5 = require("json5") as { parse(text: string): unknown };
+    fs = loadDesktopModule<typeof import("fs")>("fs");
+    os = loadDesktopModule<typeof import("os")>("os");
+    path = loadDesktopModule<typeof import("path")>("path");
 }
 
 /** Model definition from Pi's models.json */
@@ -96,7 +144,7 @@ export function readPiModelsConfig(projectPath?: string): { providers: ProviderI
         if (fs.existsSync(userModelsPath)) {
             configExists = true;
             const content = fs.readFileSync(userModelsPath, "utf-8");
-            const userConfig = JSON5.parse(content) as PiModelsJson;
+            const userConfig = parseModelsJson(content);
             if (userConfig.providers) {
                 Object.assign(providers, userConfig.providers);
             }
@@ -113,7 +161,7 @@ export function readPiModelsConfig(projectPath?: string): { providers: ProviderI
             if (fs.existsSync(projectModelsPath)) {
                 configExists = true;
                 const content = fs.readFileSync(projectModelsPath, "utf-8");
-                const projectConfig = JSON5.parse(content) as PiModelsJson;
+                const projectConfig = parseModelsJson(content);
                 if (projectConfig.providers) {
                     // Project-level overrides user-level for same provider names
                     Object.assign(providers, projectConfig.providers);

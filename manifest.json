@@ -2,7 +2,7 @@
     "id": "pi-chat",
     "name": "PiChat",
     "version": "0.2.0",
-    "minAppVersion": "1.11.4",
+    "minAppVersion": "1.13.0",
     "description": "Chat with Pi coding agent locally. Reads ~/.pi/agent for Pi's config and session history.",
     "author": "Geng",
     "isDesktopOnly": true

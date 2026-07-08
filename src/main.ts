@@ -501,21 +501,26 @@ export default class PiPlugin extends Plugin {
                 this.connection = null;
             });
 
-            // Refresh status bar and register commands once connected
-            window.setTimeout(() => {
-                const statusBar = this.statusBar;
-                if (statusBar) {
-                    void statusBar.refreshModel();
-                    void statusBar.refreshStats();
-                }
-                void this.registerPiCommands();
-            }, 1000);
+            this.scheduleConnectionReadyRefresh();
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error("[Pi Plugin] Failed to connect to Pi:", err);
             showCriticalNotice(t("notices.startFailed", { msg }));
             this.connection = null;
         }
+    }
+
+    private scheduleConnectionReadyRefresh(): void {
+        window.setTimeout(() => {
+            void this.applyThinkingLevelSetting(this.settings.thinkingLevel);
+
+            const statusBar = this.statusBar;
+            if (statusBar) {
+                void statusBar.refreshModel();
+                void statusBar.refreshStats();
+            }
+            void this.registerPiCommands();
+        }, 1000);
     }
 
     /**
@@ -560,6 +565,7 @@ export default class PiPlugin extends Plugin {
                 modelId: selected.id,
             });
             new Notice(t("notices.modelSwitched", { name: selected.name }));
+            await this.applyThinkingLevelSetting(this.settings.thinkingLevel);
             if (this.statusBar) {
                 this.statusBar.setModel(selected.name, "");
                 void this.statusBar.refreshModel();

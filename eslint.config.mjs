@@ -18,7 +18,7 @@ const typedConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({
 
 export default [
   {
-    ignores: ["main.js", "package-lock.json", "eslint.config.mjs", "esbuild.config.mjs", "vitest.config.ts"],
+    ignores: ["main.js", "package-lock.json", "eslint.config.mjs", "esbuild.config.mjs", "vitest.config.ts", "graphify-out/**"],
   },
   eslint.configs.recommended,
   ...obsidianmd.configs.recommendedWithLocalesEn,

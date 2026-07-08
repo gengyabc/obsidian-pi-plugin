@@ -1,5 +1,6 @@
 import type PiPlugin from "./main";
 import { t } from "./i18n/index";
+import { resolveDisplayedThinkingLevel } from "./thinking-level";
 
 /**
  * Manages the status bar item showing Pi connection state,
@@ -80,7 +81,10 @@ export class PiStatusBar {
             if (data) {
                 const model = data.model as Record<string, unknown> | undefined;
                 this.model = (model?.name as string) ?? "";
-                this.thinkingLevel = (data.thinkingLevel as string) ?? "";
+                this.thinkingLevel = resolveDisplayedThinkingLevel(
+                    this.plugin.settings.thinkingLevel,
+                    typeof data.thinkingLevel === "string" ? data.thinkingLevel : undefined,
+                );
                 this.sessionName = (data.sessionName as string) ?? "";
                 this.render();
             }

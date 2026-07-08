@@ -1,4 +1,5 @@
 import { Platform } from "obsidian";
+import { parseJsonRecord } from "./json-utils";
 
 // Guard Node.js imports for desktop-only (Rule 36)
 let spawn: typeof import("child_process").spawn;
@@ -6,11 +7,14 @@ let createInterface: typeof import("readline").createInterface;
 type ChildProcess = import("child_process").ChildProcess;
 type ReadlineInterface = import("readline").Interface;
 
+function loadDesktopModule<T>(name: string): T {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
+    return require(name) as T;
+}
+
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js child_process module only available on desktop, guarded by Platform.isDesktop
-    const childProcessModule = require("child_process") as typeof import("child_process");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js readline module only available on desktop, guarded by Platform.isDesktop
-    const readlineModule = require("readline") as typeof import("readline");
+    const childProcessModule = loadDesktopModule<typeof import("child_process")>("child_process");
+    const readlineModule = loadDesktopModule<typeof import("readline")>("readline");
     spawn = childProcessModule.spawn;
     createInterface = readlineModule.createInterface;
 }
@@ -27,6 +31,14 @@ export interface RpcEvent {
     error?: string;
     data?: Record<string, unknown>;
     [key: string]: unknown;
+}
+
+function parseRpcEvent(text: string): RpcEvent | null {
+    const record = parseJsonRecord(text);
+    if (!record || typeof record.type !== "string") {
+        return null;
+    }
+    return record as RpcEvent;
 }
 
 export interface RpcResponse extends RpcEvent {
@@ -215,12 +227,17 @@ export class PiConnection {
                 if (!trimmed) return;
 
                 try {
-                    const event = JSON.parse(trimmed) as RpcEvent;
-                    this.dispatch(event);
+                    const event = parseRpcEvent(trimmed);
+                    if (event) {
+                        this.dispatch(event);
+                        return;
+                    }
                 } catch {
-                    // Non-JSON output — ignore (Pi may emit debug text)
-                    console.warn("[Pi RPC] Non-JSON line from stdout:", trimmed);
+                    // Fall through to warning below.
                 }
+
+                // Non-JSON output — ignore (Pi may emit debug text)
+                console.warn("[Pi RPC] Non-JSON line from stdout:", trimmed);
             });
         }
 

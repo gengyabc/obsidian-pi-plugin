@@ -14,6 +14,8 @@ import { SessionManager } from "./sessions";
 import { SessionPanel } from "./session-panel";
 import type { PiSession } from "./session-scanner";
 import { PermissionSelectModal, PermissionConfirmModal, PermissionInputModal } from "./permission-modal";
+import { getArray, getBoolean, getNumber, getRecord, getString, isRecord, parseJsonRecord } from "./json-utils";
+import { resolveDisplayedThinkingLevel } from "./thinking-level";
 
 /** Content block from Pi's message content array */
 interface ContentBlock {
@@ -54,6 +56,10 @@ interface ExtensionUiRequest {
     placeholder?: string;
     options?: string[];
     initialValue?: string;
+}
+
+function isContentBlock(value: unknown): value is ContentBlock {
+    return isRecord(value) && typeof value.type === "string";
 }
 
 export const VIEW_TYPE_PI_CHAT = "pi-chat-view";
@@ -339,8 +345,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_state" });
-            const data = response.data;
-            const sessionFile = data?.sessionFile as string | undefined;
+            const sessionFile = response.data ? getString(response.data, "sessionFile") : undefined;
             if (sessionFile) {
                 this.currentSessionPath = sessionFile;
                 this.plugin.messageStore.setLastSession(sessionFile);
@@ -434,8 +439,8 @@ export class PiChatView extends ItemView {
             if (!data) return;
 
             // Session name
-            const sessionName = data.sessionName as string | undefined;
-            const sessionFile = data.sessionFile as string | undefined;
+            const sessionName = getString(data, "sessionName");
+            const sessionFile = getString(data, "sessionFile");
             if (this.headerSessionName && !this.isEditingName) {
                 const displayName = sessionName
                     || (sessionFile ? sessionFile.replace(/^.*\//, "").replace(/\.jsonl$/, "") : null)
@@ -444,12 +449,15 @@ export class PiChatView extends ItemView {
             }
 
             // Model
-            const model = data.model as Record<string, unknown> | undefined;
-            const modelName = model?.name as string | undefined;
-            const thinkingLevel = data.thinkingLevel as string | undefined;
+            const model = getRecord(data, "model");
+            const modelName = model ? getString(model, "name") : undefined;
+            const thinkingLevel = resolveDisplayedThinkingLevel(
+                this.plugin.settings.thinkingLevel,
+                getString(data, "thinkingLevel"),
+            );
             if (this.headerModel) {
                 let modelText = modelName || "";
-                if (thinkingLevel && thinkingLevel !== "off") {
+                if (thinkingLevel !== "off") {
                     modelText += ` :${thinkingLevel}`;
                 }
                 this.headerModel.setText(modelText);
@@ -457,7 +465,7 @@ export class PiChatView extends ItemView {
             }
 
             // Working directory
-            const cwd = data.cwd as string | undefined;
+            const cwd = getString(data, "cwd");
             if (this.headerCwd) {
                 // Show just the last directory component
                 const shortCwd = cwd ? cwd.replace(/^.*\//, "") : "";
@@ -541,12 +549,13 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_messages" });
-            const data = response.data;
-            const rawMessages = data?.messages as Array<Record<string, unknown>> | undefined;
+            const rawMessages = response.data ? getArray(response.data, "messages") : undefined;
             if (!Array.isArray(rawMessages) || rawMessages.length === 0) return;
 
+            const agentMessages = rawMessages.filter(isRecord);
+
             const chatMessages: ChatMessage[] = [];
-            for (const raw of rawMessages) {
+            for (const raw of agentMessages) {
                 const msg = this.convertAgentMessage(raw);
                 if (msg) chatMessages.push(msg);
             }
@@ -574,8 +583,8 @@ export class PiChatView extends ItemView {
      * AgentMessages have: { role: "user"|"assistant"|"toolResult", content, ... }
      */
     private convertAgentMessage(raw: Record<string, unknown>): ChatMessage | null {
-        const role = raw.role as string;
-        const timestamp = (raw.timestamp as number) || Date.now();
+        const role = getString(raw, "role");
+        const timestamp = getNumber(raw, "timestamp") ?? Date.now();
 
         if (role === "user") {
             const text = this.extractMessageText(raw.content);
@@ -592,14 +601,16 @@ export class PiChatView extends ItemView {
             const content = raw.content;
             if (!Array.isArray(content)) return null;
 
-            const text = content
-                .filter((b: ContentBlock) => b.type === "text" && b.text)
-                .map((b: ContentBlock) => b.text)
+            const blocks = content.filter(isContentBlock);
+
+            const text = blocks
+                .filter((block): block is ContentBlock & { text: string } => block.type === "text" && typeof block.text === "string")
+                .map((block) => block.text)
                 .join("\n");
 
-            const thinking = content
-                .filter((b: ContentBlock) => b.type === "thinking" && b.thinking)
-                .map((b: ContentBlock) => b.thinking)
+            const thinking = blocks
+                .filter((block): block is ContentBlock & { thinking: string } => block.type === "thinking" && typeof block.thinking === "string")
+                .map((block) => block.thinking)
                 .join("\n\n");
 
             if (!text && !thinking) return null;
@@ -620,9 +631,9 @@ export class PiChatView extends ItemView {
                 role: "tool",
                 content: text,
                 timestamp,
-                toolName: (raw.toolName as string) || "tool",
-                toolCallId: (raw.toolCallId as string) || undefined,
-                isError: (raw.isError as boolean) || undefined,
+                toolName: getString(raw, "toolName") || "tool",
+                toolCallId: getString(raw, "toolCallId") || undefined,
+                isError: getBoolean(raw, "isError") || undefined,
             };
         }
 
@@ -665,8 +676,7 @@ export class PiChatView extends ItemView {
         if (conn?.isConnected()) {
             try {
                 const response = await conn.send({ type: "new_session" });
-                const data = response.data;
-                if (data?.cancelled) {
+                if (response.data && getBoolean(response.data, "cancelled") === true) {
                     new Notice(t("notices.newSessionCancelled"));
                     return;
                 }
@@ -683,8 +693,7 @@ export class PiChatView extends ItemView {
             const conn = this.plugin.connection;
             if (conn?.isConnected()) {
                 const state = await conn.send({ type: "get_state" });
-                const data = state.data;
-                const sessionFile = data?.sessionFile as string | undefined;
+                const sessionFile = state.data ? getString(state.data, "sessionFile") : undefined;
                 if (sessionFile) {
                     this.currentSessionPath = sessionFile;
                     this.plugin.messageStore.setLastSession(sessionFile);
@@ -734,8 +743,7 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "switch_session", sessionPath: session.path });
-            const data = response.data;
-            if (data?.cancelled) {
+            if (response.data && getBoolean(response.data, "cancelled") === true) {
                 new Notice(t("notices.switchCancelled"));
                 return;
             }
@@ -789,38 +797,39 @@ export class PiChatView extends ItemView {
             const messages: ChatMessage[] = [];
             for (const line of lines) {
                 try {
-                    const entry = JSON.parse(line) as { type: string; message?: Record<string, unknown> };
-                    // Pi wraps messages in { type: "message", message: { role, content, ... } }
-                    if (entry.type !== "message" || !entry.message) continue;
+                    const entry = parseJsonRecord(line);
+                    const msg = entry && entry.type === "message" ? getRecord(entry, "message") : undefined;
+                    if (!msg) continue;
 
-                    const msg = entry.message;
                     const text = this.extractMessageText(msg.content);
+                    const role = getString(msg, "role");
+                    const timestamp = getNumber(msg, "timestamp") ?? Date.now();
 
-                    if (msg.role === "user" && text) {
+                    if (role === "user" && text) {
                         messages.push({
                             id: generateMessageId(),
                             role: "user",
                             content: text,
-                            timestamp: (msg.timestamp as number) || Date.now(),
+                            timestamp,
                         });
-                    } else if (msg.role === "assistant" && text) {
+                    } else if (role === "assistant" && text) {
                         messages.push({
                             id: generateMessageId(),
                             role: "assistant",
                             content: text,
-                            timestamp: (msg.timestamp as number) || Date.now(),
+                            timestamp,
                         });
-                    } else if (msg.role === "toolResult") {
+                    } else if (role === "toolResult") {
                         const resultText = this.extractMessageText(msg.content);
                         if (resultText) {
                             messages.push({
                                 id: generateMessageId(),
                                 role: "tool",
                                 content: resultText,
-                                toolName: (msg.toolName as string) || "tool",
-                                toolCallId: msg.toolCallId as string | undefined,
-                                isError: msg.isError as boolean | undefined,
-                                timestamp: (msg.timestamp as number) || Date.now(),
+                                toolName: getString(msg, "toolName") || "tool",
+                                toolCallId: getString(msg, "toolCallId") || undefined,
+                                isError: getBoolean(msg, "isError") || undefined,
+                                timestamp,
                             });
                         }
                     }
@@ -858,8 +867,8 @@ export class PiChatView extends ItemView {
         if (typeof content === "string") return content;
         if (Array.isArray(content)) {
             return content
-                .filter((b: ContentBlock) => b.type === "text" && b.text)
-                .map((b: ContentBlock) => b.text)
+                .filter((block): block is ContentBlock & { text: string } => isContentBlock(block) && block.type === "text" && typeof block.text === "string")
+                .map((block) => block.text)
                 .join("\n");
         }
         return "";
@@ -876,7 +885,16 @@ export class PiChatView extends ItemView {
 
         try {
             const response = await conn.send({ type: "get_state" });
-            return (response.data as PiStateData | undefined) ?? null;
+            const data = response.data;
+            if (!data) return null;
+
+            return {
+                sessionFile: getString(data, "sessionFile"),
+                sessionId: getString(data, "sessionId"),
+                sessionName: getString(data, "sessionName"),
+                isStreaming: getBoolean(data, "isStreaming"),
+                messageCount: getNumber(data, "messageCount"),
+            };
         } catch {
             return null;
         }

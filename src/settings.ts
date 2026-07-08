@@ -54,6 +54,7 @@ type SettingItem =
 type SettingGroupDefinition = { type: "group"; heading: string; items: SettingItem[] };
 
 export class PiSettingTab extends PluginSettingTab {
+    declare update: () => void;
     plugin: PiPlugin;
 
     constructor(app: App, plugin: PiPlugin) {
@@ -407,17 +408,10 @@ export class PiSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Re-render the settings tab. Obsidian 1.13+ exposes update() on
-     * PluginSettingTab to re-walk getSettingDefinitions(); on older versions
-     * we fall back to display(). display() is always defined on this class.
+     * Re-render the settings tab using the declarative settings API.
      */
     private refreshSettingsTab(): void {
-        const tab = this as PiSettingTab & { update?: () => void };
-        if (typeof tab.update === "function") {
-            tab.update();
-            return;
-        }
-        this.display();
+        this.update();
     }
 
     /**

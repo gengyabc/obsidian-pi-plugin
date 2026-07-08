@@ -16,6 +16,7 @@
 
 // Guard Node.js imports for desktop-only (Rule 36)
 import { Platform } from "obsidian";
+import { isRecord, parseJsonRecord } from "./json-utils";
 
 let _readFile: (path: string, encoding: "utf-8") => Promise<string>;
 let _readdir: (path: string) => Promise<string[]>;
@@ -24,18 +25,20 @@ let _join: (...paths: string[]) => string;
 let _basename: (path: string, suffix?: string) => string;
 let _homedir: () => string;
 
+function loadDesktopModule<T>(name: string): T {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js modules are loaded only on desktop, behind Platform.isDesktop.
+    return require(name) as T;
+}
+
 if (Platform.isDesktop) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs/promises module only available on desktop, guarded by Platform.isDesktop
-    const fsPromisesModule = require("fs/promises") as typeof import("fs/promises");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js path module only available on desktop, guarded by Platform.isDesktop
-    const pathModule = require("path") as typeof import("path");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js os module only available on desktop, guarded by Platform.isDesktop
-    const osModule = require("os") as typeof import("os");
-    _readFile = (...args) => fsPromisesModule.readFile(...args);
-    _readdir = (...args) => fsPromisesModule.readdir(...args);
-    _stat = (...args) => fsPromisesModule.stat(...args);
-    _join = (...args) => pathModule.join(...args);
-    _basename = (...args) => pathModule.basename(...args);
+    const fsPromisesModule = loadDesktopModule<typeof import("fs/promises")>("fs/promises");
+    const pathModule = loadDesktopModule<typeof import("path")>("path");
+    const osModule = loadDesktopModule<typeof import("os")>("os");
+    _readFile = (filePath, encoding) => fsPromisesModule.readFile(filePath, encoding);
+    _readdir = (dirPath) => fsPromisesModule.readdir(dirPath);
+    _stat = (filePath) => fsPromisesModule.stat(filePath);
+    _join = (...paths) => pathModule.join(...paths);
+    _basename = (filePath, suffix) => pathModule.basename(filePath, suffix);
     _homedir = () => osModule.homedir();
 }
 
@@ -136,41 +139,37 @@ export class SessionScanner {
 
         for (const line of lines) {
             try {
-                const entry = JSON.parse(line) as {
-                    type: string;
-                    cwd?: string;
-                    id?: string;
-                    name?: string;
-                    message?: {
-                        role?: string;
-                        content?: unknown;
-                    };
-                };
+                const entry = parseJsonRecord(line);
+                if (!entry || typeof entry.type !== "string") {
+                    continue;
+                }
 
                 // Session header — first line
                 if (entry.type === "session") {
-                    if (entry.cwd) cwd = entry.cwd;
-                    if (entry.id) name = entry.id;
+                    if (typeof entry.cwd === "string") cwd = entry.cwd;
+                    if (typeof entry.id === "string") name = entry.id;
                     continue;
                 }
 
                 // Session name set by user
-                if (entry.type === "session_name" && entry.name) {
+                if (entry.type === "session_name" && typeof entry.name === "string") {
                     sessionName = entry.name;
                     continue;
                 }
 
-                // Message entry — count and extract preview
-                if (entry.type === "message" && entry.message) {
-                    const msg = entry.message;
+                const message = isRecord(entry.message) ? entry.message : null;
 
-                    if (msg.role === "user" || msg.role === "assistant") {
+                // Message entry — count and extract preview
+                if (entry.type === "message" && message) {
+                    const role = typeof message.role === "string" ? message.role : undefined;
+
+                    if (role === "user" || role === "assistant") {
                         messageCount++;
                     }
 
                     // First user message as preview
-                    if (!preview && msg.role === "user") {
-                        preview = this.extractText(msg.content);
+                    if (!preview && role === "user") {
+                        preview = this.extractText(message.content);
                         if (preview.length > 80) {
                             preview = preview.slice(0, 80) + "…";
                         }
@@ -210,8 +209,8 @@ export class SessionScanner {
         if (typeof content === "string") return content;
         if (Array.isArray(content)) {
             return content
-                .filter((b: ContentBlock) => b.type === "text" && b.text)
-                .map((b: ContentBlock) => b.text)
+                .filter((block): block is ContentBlock => isRecord(block) && block.type === "text" && typeof block.text === "string")
+                .map((block) => block.text)
                 .join(" ");
         }
         return "";

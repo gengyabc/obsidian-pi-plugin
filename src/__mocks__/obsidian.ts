@@ -10,6 +10,17 @@ export const Platform = {
 };
 
 export class App {}
+export class Plugin {
+    app = new App();
+    addSettingTab(): void {}
+    addStatusBarItem(): HTMLElement { return {} as HTMLElement; }
+    addCommand(): void {}
+    addRibbonIcon(): HTMLElement { return {} as HTMLElement; }
+    registerView(): void {}
+    registerExtensions(): void {}
+    loadData(): Promise<unknown> { return Promise.resolve(null); }
+    saveData(): Promise<void> { return Promise.resolve(); }
+}
 export class PluginSettingTab {}
 export class Modal {
     constructor(_app: App) {}
@@ -18,6 +29,25 @@ export class Modal {
     onOpen(): void {}
     onClose(): void {}
     contentEl = { createEl: () => {}, empty: () => {} };
+}
+export class FuzzySuggestModal<T> {
+    constructor(_app: App) {}
+    open(): void {}
+    close(): void {}
+    getItems(): T[] { return []; }
+    getItemText(_item: T): string { return ""; }
+    onChooseItem(_item: T, _evt: MouseEvent | KeyboardEvent): void {}
+}
+export class WorkspaceLeaf {}
+export class Component {}
+export class ItemView extends Component {
+    constructor(_leaf: WorkspaceLeaf) { super(); }
+}
+export class MarkdownRenderer {
+    static render(): Promise<void> { return Promise.resolve(); }
+}
+export class Notice {
+    constructor(_message?: string, _timeout?: number) {}
 }
 export class Setting {
     constructor(_containerEl: HTMLElement) {}

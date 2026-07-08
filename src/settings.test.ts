@@ -10,6 +10,7 @@ vi.mock("os");
 
 // Import after mocking
 import { App } from "obsidian";
+import type PiPlugin from "./main";
 import { DEFAULT_SETTINGS, PiSettingTab } from "./settings";
 
 describe("DEFAULT_SETTINGS", () => {
@@ -33,9 +34,9 @@ describe("PiSettingTab", () => {
             settings: { ...DEFAULT_SETTINGS },
             saveSettings: vi.fn().mockResolvedValue(undefined),
             applyThinkingLevelSetting: vi.fn().mockResolvedValue(undefined),
-        };
+        } satisfies Pick<PiPlugin, "settings" | "saveSettings" | "applyThinkingLevelSetting">;
 
-        const tab = new PiSettingTab(new App(), plugin as any);
+        const tab = new PiSettingTab(new App(), plugin as unknown as PiPlugin);
 
         await tab.setControlValue("thinkingLevel", "low");
 

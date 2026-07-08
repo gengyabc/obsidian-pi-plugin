@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeThinkingLevel, shouldDisplayThinkingLevel } from "./thinking-level";
+import { normalizeThinkingLevel, resolveDisplayedThinkingLevel, shouldDisplayThinkingLevel } from "./thinking-level";
 
 describe("normalizeThinkingLevel", () => {
     it("keeps supported levels", () => {
@@ -28,5 +28,17 @@ describe("shouldDisplayThinkingLevel", () => {
     it("shows active thinking levels", () => {
         expect(shouldDisplayThinkingLevel("low")).toBe(true);
         expect(shouldDisplayThinkingLevel("medium")).toBe(true);
+    });
+});
+
+describe("resolveDisplayedThinkingLevel", () => {
+    it("prefers the configured plugin setting over stale runtime state", () => {
+        expect(resolveDisplayedThinkingLevel("low", "medium")).toBe("low");
+        expect(resolveDisplayedThinkingLevel("off", "medium")).toBe("off");
+    });
+
+    it("falls back to runtime state when the configured value is missing", () => {
+        expect(resolveDisplayedThinkingLevel("", "high")).toBe("high");
+        expect(resolveDisplayedThinkingLevel(undefined, "minimal")).toBe("minimal");
     });
 });

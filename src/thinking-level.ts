@@ -19,3 +19,14 @@ export function normalizeThinkingLevel(level: string | null | undefined, fallbac
 export function shouldDisplayThinkingLevel(level: string | null | undefined): boolean {
     return normalizeThinkingLevel(level, "off") !== "off";
 }
+
+export function resolveDisplayedThinkingLevel(
+    configuredLevel: string | null | undefined,
+    runtimeLevel: string | null | undefined,
+): PiThinkingLevel {
+    if (configuredLevel) {
+        return normalizeThinkingLevel(configuredLevel);
+    }
+
+    return normalizeThinkingLevel(runtimeLevel);
+}
