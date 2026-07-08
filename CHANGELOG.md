@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.8] - 2026-07-08
+
+### Changed
+- Switched model/API key settings to a declarative settings definition pattern
+- Enabled shell spawn support for non-ASCII Pi binary paths
+- Added JSON5 parsing for Pi `models.json` to support trailing commas
+- Bundled `json5` and synced thinking level on connect and live settings changes
+- Improved graph/documentation tooling for repository analysis
+
+### Fixed
+- Propagated thinking level to Pi on startup and while settings change
+- Stripped leading `$` from Pi model API key environment variable names
+- Resolved unsafe JSON parsing and `@typescript-eslint/no-unsafe-*` warnings across source files
+
+### Chore
+- Bumped version to 0.2.8
+
 ## [0.2.0] - 2026-05-15
 
 ### Added

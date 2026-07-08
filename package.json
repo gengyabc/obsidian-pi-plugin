@@ -1,6 +1,6 @@
 {
     "name": "pi-chat",
-    "version": "0.2.0",
+    "version": "0.2.8",
     "description": "Chat with Pi coding agent inside Obsidian",
     "type": "module",
     "main": "main.js",
