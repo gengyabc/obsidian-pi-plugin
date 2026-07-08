@@ -18,6 +18,10 @@
 import { Platform } from "obsidian";
 import { getRecord, getString, isRecord, parseJsonRecord } from "./json-utils";
 
+interface DesktopRequire {
+    (id: string): unknown;
+}
+
 let _readFile: (path: string, encoding: "utf-8") => Promise<string>;
 let _readdir: (path: string) => Promise<string[]>;
 let _stat: (path: string) => Promise<import("fs").Stats>;
@@ -25,15 +29,15 @@ let _join: (...paths: string[]) => string;
 let _basename: (path: string, suffix?: string) => string;
 let _homedir: () => string;
 
-function loadDesktopModule(name: string): unknown {
-    const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name);
+function loadDesktopModule<T>(name: string): T {
+    const desktopRequire = require as DesktopRequire;
+    return desktopRequire(name) as T;
 }
 
 if (Platform.isDesktop) {
-    const fsPromisesModule = loadDesktopModule("fs/promises") as typeof import("fs/promises");
-    const pathModule = loadDesktopModule("path") as typeof import("path");
-    const osModule = loadDesktopModule("os") as typeof import("os");
+    const fsPromisesModule = loadDesktopModule<typeof import("fs/promises")>("fs/promises");
+    const pathModule = loadDesktopModule<typeof import("path")>("path");
+    const osModule = loadDesktopModule<typeof import("os")>("os");
     _readFile = (filePath, encoding) => fsPromisesModule.readFile(filePath, encoding);
     _readdir = (dirPath) => fsPromisesModule.readdir(dirPath);
     _stat = (filePath) => fsPromisesModule.stat(filePath);

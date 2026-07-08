@@ -62,6 +62,11 @@ function isContentBlock(value: unknown): value is ContentBlock {
     return isRecord(value) && typeof value.type === "string";
 }
 
+async function loadFsPromises(): Promise<typeof import("fs/promises")> {
+    const module = await import("fs/promises");
+    return module;
+}
+
 export const VIEW_TYPE_PI_CHAT = "pi-chat-view";
 
 /**
@@ -780,7 +785,7 @@ export class PiChatView extends ItemView {
      * Delete a Pi session file.
      */
     private async deleteSession(session: PiSession): Promise<void> {
-        const fsPromises: typeof import("fs/promises") = await import("fs/promises");
+        const fsPromises = await loadFsPromises();
         await fsPromises.unlink(session.path);
     }
 
@@ -790,7 +795,7 @@ export class PiChatView extends ItemView {
      */
     private async exportSession(session: PiSession): Promise<void> {
         try {
-            const fsPromises: typeof import("fs/promises") = await import("fs/promises");
+            const fsPromises = await loadFsPromises();
             const content = await fsPromises.readFile(session.path, "utf-8");
             const lines = content.split("\n").filter((l) => l.trim());
 

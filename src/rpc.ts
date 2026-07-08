@@ -1,27 +1,30 @@
 import { Platform } from "obsidian";
-import type { ChildProcessByStdio, SpawnOptions } from "child_process";
-import type { Readable, Writable } from "stream";
-import { parseJsonRecord } from "./json-utils";
+import type { ChildProcessWithoutNullStreams, SpawnOptions } from "child_process";
+import type { Interface as ReadlineInterface } from "readline";
+import { getRecord, parseJsonRecord } from "./json-utils";
+
+interface DesktopRequire {
+    (id: string): unknown;
+}
 
 // Guard Node.js imports for desktop-only (Rule 36)
-type RpcChildProcess = ChildProcessByStdio<Writable, Readable, Readable>;
+type RpcChildProcess = ChildProcessWithoutNullStreams;
 type SpawnProcess = (command: string, args?: readonly string[], options?: SpawnOptions) => RpcChildProcess;
 type CreateLineReader = typeof import("readline").createInterface;
 
 let spawnProcess: SpawnProcess;
 let createLineReader: CreateLineReader;
 let processModule: typeof import("process");
-type ReadlineInterface = import("readline").Interface;
 
-function loadDesktopModule(name: string): unknown {
-    const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name);
+function loadDesktopModule<T>(name: string): T {
+    const desktopRequire = require as DesktopRequire;
+    return desktopRequire(name) as T;
 }
 
 if (Platform.isDesktop) {
-    const childProcessModule = loadDesktopModule("child_process") as typeof import("child_process");
-    const readlineModule = loadDesktopModule("readline") as typeof import("readline");
-    processModule = loadDesktopModule("process") as typeof import("process");
+    const childProcessModule = loadDesktopModule<typeof import("child_process")>("child_process");
+    const readlineModule = loadDesktopModule<typeof import("readline")>("readline");
+    processModule = loadDesktopModule<typeof import("process")>("process");
     spawnProcess = childProcessModule.spawn;
     createLineReader = readlineModule.createInterface;
 }
@@ -52,9 +55,7 @@ function parseRpcEvent(text: string): RpcEvent | null {
         id: typeof record.id === "string" ? record.id : undefined,
         success: typeof record.success === "boolean" ? record.success : undefined,
         error: typeof record.error === "string" ? record.error : undefined,
-        data: record.data && typeof record.data === "object" && !Array.isArray(record.data)
-            ? record.data as Record<string, unknown>
-            : undefined,
+        data: getRecord(record, "data"),
     };
 }
 
@@ -233,39 +234,35 @@ export class PiConnection {
         const stderrBuffer: string[] = [];
 
         // Parse JSON lines from stdout
-        if (this.process.stdout) {
-            this.readline = createLineReader({
-                input: this.process.stdout,
-                crlfDelay: Infinity,
-            });
+        this.readline = createLineReader({
+            input: this.process.stdout,
+            crlfDelay: Infinity,
+        });
 
-            this.readline.on("line", (line: string) => {
-                const trimmed = line.trim();
-                if (!trimmed) return;
+        this.readline.on("line", (line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) return;
 
-                try {
-                    const event = parseRpcEvent(trimmed);
-                    if (event) {
-                        this.dispatch(event);
-                        return;
-                    }
-                } catch {
-                    // Fall through to warning below.
+            try {
+                const event = parseRpcEvent(trimmed);
+                if (event) {
+                    this.dispatch(event);
+                    return;
                 }
+            } catch {
+                // Fall through to warning below.
+            }
 
-                // Non-JSON output — ignore (Pi may emit debug text)
-                console.warn("[Pi RPC] Non-JSON line from stdout:", trimmed);
-            });
-        }
+            // Non-JSON output — ignore (Pi may emit debug text)
+            console.warn("[Pi RPC] Non-JSON line from stdout:", trimmed);
+        });
 
         // Log stderr for debugging and buffer it
-        if (this.process.stderr) {
-            this.process.stderr.on("data", (data: Buffer) => {
-                const text = data.toString();
-                stderrBuffer.push(text);
-                console.warn("[Pi RPC] stderr:", text);
-            });
-        }
+        this.process.stderr.on("data", (data: Buffer) => {
+            const text = data.toString();
+            stderrBuffer.push(text);
+            console.warn("[Pi RPC] stderr:", text);
+        });
 
         // Handle process exit
         this.process.on("exit", (code: number | null, signal: string | null) => {
@@ -312,7 +309,7 @@ export class PiConnection {
      * Streaming events still go to onEvent handlers.
      */
     send(command: Record<string, unknown>): Promise<RpcEvent> {
-        if (!this.process || !this.process.stdin || !this.connected) {
+        if (!this.process || !this.connected) {
             throw new Error("Pi is not connected");
         }
 
@@ -353,7 +350,7 @@ export class PiConnection {
      * Used for extension UI responses in RPC mode.
      */
     sendRaw(command: Record<string, unknown>): void {
-        if (!this.process || !this.process.stdin || !this.connected) {
+        if (!this.process || !this.connected) {
             throw new Error("Pi is not connected");
         }
 

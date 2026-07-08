@@ -12,14 +12,18 @@ import { Platform } from "obsidian";
 import JSON5 from "json5";
 import { getRecord, getString, isRecord } from "./json-utils";
 
+interface DesktopRequire {
+    (id: string): unknown;
+}
+
 // Guard Node.js imports for desktop-only (Rule 36)
 let fs: typeof import("fs");
 let os: typeof import("os");
 let path: typeof import("path");
 
-function loadDesktopModule(name: string): unknown {
-    const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name);
+function loadDesktopModule<T>(name: string): T {
+    const desktopRequire = require as DesktopRequire;
+    return desktopRequire(name) as T;
 }
 
 function parseModelConfig(model: Record<string, unknown>): PiModelConfig | null {
@@ -55,7 +59,7 @@ function parseModelConfig(model: Record<string, unknown>): PiModelConfig | null 
 }
 
 function parseModelsJson(text: string): PiModelsJson {
-    const parsed = JSON5.parse(text) as unknown;
+    const parsed = JSON5.parse(text);
     if (!isRecord(parsed)) {
         return {};
     }
@@ -91,9 +95,9 @@ function parseModelsJson(text: string): PiModelsJson {
 }
 
 if (Platform.isDesktop) {
-    fs = loadDesktopModule("fs") as typeof import("fs");
-    os = loadDesktopModule("os") as typeof import("os");
-    path = loadDesktopModule("path") as typeof import("path");
+    fs = loadDesktopModule<typeof import("fs")>("fs");
+    os = loadDesktopModule<typeof import("os")>("os");
+    path = loadDesktopModule<typeof import("path")>("path");
 }
 
 /** Model definition from Pi's models.json */
