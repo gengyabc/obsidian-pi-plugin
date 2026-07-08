@@ -798,10 +798,13 @@ export class PiChatView extends ItemView {
             for (const line of lines) {
                 try {
                     const entry = parseJsonRecord(line);
-                    const msg = entry && entry.type === "message" ? getRecord(entry, "message") : undefined;
+                    if (!entry || entry.type !== "message") continue;
+
+                    const msg = getRecord(entry, "message");
                     if (!msg) continue;
 
-                    const text = this.extractMessageText(msg.content);
+                    const contentValue = msg["content"];
+                    const text = this.extractMessageText(contentValue);
                     const role = getString(msg, "role");
                     const timestamp = getNumber(msg, "timestamp") ?? Date.now();
 
@@ -820,7 +823,7 @@ export class PiChatView extends ItemView {
                             timestamp,
                         });
                     } else if (role === "toolResult") {
-                        const resultText = this.extractMessageText(msg.content);
+                        const resultText = this.extractMessageText(contentValue);
                         if (resultText) {
                             messages.push({
                                 id: generateMessageId(),

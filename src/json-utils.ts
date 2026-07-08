@@ -28,6 +28,6 @@ export function getArray(record: Record<string, unknown>, key: string): unknown[
 }
 
 export function parseJsonRecord(text: string): Record<string, unknown> | null {
-    const value: unknown = JSON.parse(text);
+    const value = JSON.parse(text) as unknown;
     return isRecord(value) ? value : null;
 }

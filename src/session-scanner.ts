@@ -16,7 +16,7 @@
 
 // Guard Node.js imports for desktop-only (Rule 36)
 import { Platform } from "obsidian";
-import { isRecord, parseJsonRecord } from "./json-utils";
+import { getRecord, getString, isRecord, parseJsonRecord } from "./json-utils";
 
 let _readFile: (path: string, encoding: "utf-8") => Promise<string>;
 let _readdir: (path: string) => Promise<string[]>;
@@ -25,15 +25,15 @@ let _join: (...paths: string[]) => string;
 let _basename: (path: string, suffix?: string) => string;
 let _homedir: () => string;
 
-function loadDesktopModule<T>(name: string): T {
+function loadDesktopModule(name: string): unknown {
     const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name) as T;
+    return desktopRequire(name);
 }
 
 if (Platform.isDesktop) {
-    const fsPromisesModule = loadDesktopModule<typeof import("fs/promises")>("fs/promises");
-    const pathModule = loadDesktopModule<typeof import("path")>("path");
-    const osModule = loadDesktopModule<typeof import("os")>("os");
+    const fsPromisesModule = loadDesktopModule("fs/promises") as typeof import("fs/promises");
+    const pathModule = loadDesktopModule("path") as typeof import("path");
+    const osModule = loadDesktopModule("os") as typeof import("os");
     _readFile = (filePath, encoding) => fsPromisesModule.readFile(filePath, encoding);
     _readdir = (dirPath) => fsPromisesModule.readdir(dirPath);
     _stat = (filePath) => fsPromisesModule.stat(filePath);
@@ -146,22 +146,22 @@ export class SessionScanner {
 
                 // Session header — first line
                 if (entry.type === "session") {
-                    if (typeof entry.cwd === "string") cwd = entry.cwd;
-                    if (typeof entry.id === "string") name = entry.id;
+                    cwd = getString(entry, "cwd") ?? cwd;
+                    name = getString(entry, "id") ?? name;
                     continue;
                 }
 
                 // Session name set by user
-                if (entry.type === "session_name" && typeof entry.name === "string") {
-                    sessionName = entry.name;
+                if (entry.type === "session_name") {
+                    sessionName = getString(entry, "name") ?? sessionName;
                     continue;
                 }
 
-                const message = isRecord(entry.message) ? entry.message : null;
+                const message = getRecord(entry, "message");
 
                 // Message entry — count and extract preview
                 if (entry.type === "message" && message) {
-                    const role = typeof message.role === "string" ? message.role : undefined;
+                    const role = getString(message, "role");
 
                     if (role === "user" || role === "assistant") {
                         messageCount++;
@@ -169,7 +169,7 @@ export class SessionScanner {
 
                     // First user message as preview
                     if (!preview && role === "user") {
-                        preview = this.extractText(message.content);
+                        preview = this.extractText(message["content"]);
                         if (preview.length > 80) {
                             preview = preview.slice(0, 80) + "…";
                         }

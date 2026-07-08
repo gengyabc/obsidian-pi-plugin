@@ -1,22 +1,27 @@
 import { Platform } from "obsidian";
+import type { ChildProcessByStdio, SpawnOptions } from "child_process";
+import type { Readable, Writable } from "stream";
 import { parseJsonRecord } from "./json-utils";
 
 // Guard Node.js imports for desktop-only (Rule 36)
-let spawnProcess: typeof import("child_process").spawn;
-let createLineReader: typeof import("readline").createInterface;
+type RpcChildProcess = ChildProcessByStdio<Writable, Readable, Readable>;
+type SpawnProcess = (command: string, args?: readonly string[], options?: SpawnOptions) => RpcChildProcess;
+type CreateLineReader = typeof import("readline").createInterface;
+
+let spawnProcess: SpawnProcess;
+let createLineReader: CreateLineReader;
 let processModule: typeof import("process");
-type ChildProcess = import("child_process").ChildProcess;
 type ReadlineInterface = import("readline").Interface;
 
-function loadDesktopModule<T>(name: string): T {
+function loadDesktopModule(name: string): unknown {
     const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name) as T;
+    return desktopRequire(name);
 }
 
 if (Platform.isDesktop) {
-    const childProcessModule = loadDesktopModule<typeof import("child_process")>("child_process");
-    const readlineModule = loadDesktopModule<typeof import("readline")>("readline");
-    processModule = loadDesktopModule<typeof import("process")>("process");
+    const childProcessModule = loadDesktopModule("child_process") as typeof import("child_process");
+    const readlineModule = loadDesktopModule("readline") as typeof import("readline");
+    processModule = loadDesktopModule("process") as typeof import("process");
     spawnProcess = childProcessModule.spawn;
     createLineReader = readlineModule.createInterface;
 }
@@ -40,7 +45,17 @@ function parseRpcEvent(text: string): RpcEvent | null {
     if (!record || typeof record.type !== "string") {
         return null;
     }
-    return record as RpcEvent;
+
+    return {
+        ...record,
+        type: record.type,
+        id: typeof record.id === "string" ? record.id : undefined,
+        success: typeof record.success === "boolean" ? record.success : undefined,
+        error: typeof record.error === "string" ? record.error : undefined,
+        data: record.data && typeof record.data === "object" && !Array.isArray(record.data)
+            ? record.data as Record<string, unknown>
+            : undefined,
+    };
 }
 
 export interface RpcResponse extends RpcEvent {
@@ -135,7 +150,7 @@ export class PiConnection {
     private cwd: string;
     private extraArgs: string[];
     private timeout: number;
-    private process: ChildProcess | null = null;
+    private process: RpcChildProcess | null = null;
     private readline: ReadlineInterface | null = null;
     private handlers: EventHandler[] = [];
     private disconnectHandler: (() => void) | null = null;
@@ -301,6 +316,7 @@ export class PiConnection {
             throw new Error("Pi is not connected");
         }
 
+        const process = this.process;
         const id = `req-${this.requestId++}`;
         const line = JSON.stringify({ ...command, id }) + "\n";
 
@@ -328,7 +344,7 @@ export class PiConnection {
             });
 
             // Now write the request
-            this.process!.stdin!.write(line);
+            process.stdin.write(line);
         });
     }
 
@@ -341,7 +357,8 @@ export class PiConnection {
             throw new Error("Pi is not connected");
         }
 
-        this.process.stdin.write(JSON.stringify(command) + "\n");
+        const process = this.process;
+        process.stdin.write(JSON.stringify(command) + "\n");
     }
 
     /**

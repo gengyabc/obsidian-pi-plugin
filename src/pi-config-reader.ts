@@ -10,26 +10,58 @@
 
 import { Platform } from "obsidian";
 import JSON5 from "json5";
-import { isRecord } from "./json-utils";
+import { getRecord, getString, isRecord } from "./json-utils";
 
 // Guard Node.js imports for desktop-only (Rule 36)
 let fs: typeof import("fs");
 let os: typeof import("os");
 let path: typeof import("path");
 
-function loadDesktopModule<T>(name: string): T {
+function loadDesktopModule(name: string): unknown {
     const desktopRequire: NodeJS.Require = require;
-    return desktopRequire(name) as T;
+    return desktopRequire(name);
+}
+
+function parseModelConfig(model: Record<string, unknown>): PiModelConfig | null {
+    const cost = getRecord(model, "cost");
+    const compat = getRecord(model, "compat");
+    const id = getString(model, "id");
+
+    if (!id) {
+        return null;
+    }
+
+    const inputValue = model["input"];
+    const contextWindowValue = model["contextWindow"];
+    const maxTokensValue = model["maxTokens"];
+    const reasoningValue = model["reasoning"];
+    const name = getString(model, "name") ?? "";
+
+    return {
+        id,
+        name,
+        reasoning: typeof reasoningValue === "boolean" ? reasoningValue : undefined,
+        input: Array.isArray(inputValue) ? inputValue.filter((item): item is string => typeof item === "string") : undefined,
+        contextWindow: typeof contextWindowValue === "number" ? contextWindowValue : undefined,
+        maxTokens: typeof maxTokensValue === "number" ? maxTokensValue : undefined,
+        cost: cost ? {
+            input: typeof cost["input"] === "number" ? cost["input"] : undefined,
+            output: typeof cost["output"] === "number" ? cost["output"] : undefined,
+            cacheRead: typeof cost["cacheRead"] === "number" ? cost["cacheRead"] : undefined,
+            cacheWrite: typeof cost["cacheWrite"] === "number" ? cost["cacheWrite"] : undefined,
+        } : undefined,
+        compat,
+    };
 }
 
 function parseModelsJson(text: string): PiModelsJson {
-    const parsed: unknown = JSON5.parse(text);
+    const parsed = JSON5.parse(text) as unknown;
     if (!isRecord(parsed)) {
         return {};
     }
 
-    const providersValue = parsed.providers;
-    if (!isRecord(providersValue)) {
+    const providersValue = getRecord(parsed, "providers");
+    if (!providersValue) {
         return {};
     }
 
@@ -39,29 +71,18 @@ function parseModelsJson(text: string): PiModelsJson {
             continue;
         }
 
-        const modelsValue = providerValue.models;
+        const modelsValue = providerValue["models"];
         const models = Array.isArray(modelsValue)
-            ? modelsValue.filter(isRecord).map((model) => ({
-                id: typeof model.id === "string" ? model.id : "",
-                name: typeof model.name === "string" ? model.name : "",
-                reasoning: typeof model.reasoning === "boolean" ? model.reasoning : undefined,
-                input: Array.isArray(model.input) ? model.input.filter((item): item is string => typeof item === "string") : undefined,
-                contextWindow: typeof model.contextWindow === "number" ? model.contextWindow : undefined,
-                maxTokens: typeof model.maxTokens === "number" ? model.maxTokens : undefined,
-                cost: isRecord(model.cost) ? {
-                    input: typeof model.cost.input === "number" ? model.cost.input : undefined,
-                    output: typeof model.cost.output === "number" ? model.cost.output : undefined,
-                    cacheRead: typeof model.cost.cacheRead === "number" ? model.cost.cacheRead : undefined,
-                    cacheWrite: typeof model.cost.cacheWrite === "number" ? model.cost.cacheWrite : undefined,
-                } : undefined,
-                compat: isRecord(model.compat) ? model.compat : undefined,
-            })).filter((model) => model.id.length > 0)
+            ? modelsValue
+                .filter(isRecord)
+                .map(parseModelConfig)
+                .filter((model): model is PiModelConfig => model !== null)
             : undefined;
 
         providers[providerName] = {
-            baseUrl: typeof providerValue.baseUrl === "string" ? providerValue.baseUrl : undefined,
-            api: typeof providerValue.api === "string" ? providerValue.api : undefined,
-            apiKey: typeof providerValue.apiKey === "string" ? providerValue.apiKey : undefined,
+            baseUrl: getString(providerValue, "baseUrl"),
+            api: getString(providerValue, "api"),
+            apiKey: getString(providerValue, "apiKey"),
             models,
         };
     }
@@ -70,9 +91,9 @@ function parseModelsJson(text: string): PiModelsJson {
 }
 
 if (Platform.isDesktop) {
-    fs = loadDesktopModule<typeof import("fs")>("fs");
-    os = loadDesktopModule<typeof import("os")>("os");
-    path = loadDesktopModule<typeof import("path")>("path");
+    fs = loadDesktopModule("fs") as typeof import("fs");
+    os = loadDesktopModule("os") as typeof import("os");
+    path = loadDesktopModule("path") as typeof import("path");
 }
 
 /** Model definition from Pi's models.json */
