@@ -24,6 +24,7 @@ data.json
 
 # links
 .pi/skills/obsidian
+.pi/refs
 
 # Logs
 *.log

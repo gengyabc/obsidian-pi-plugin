@@ -4,6 +4,7 @@ import type PiPlugin from "./main";
 import { t } from "./i18n/index";
 
 import { readPiModelsConfig, getProviderEnvVarName, getProviderModels, ProviderInfo } from "./pi-config-reader";
+import { normalizeThinkingLevel } from "./thinking-level";
 
 export interface PiPluginSettings {
     piBinaryPath: string;
@@ -141,10 +142,12 @@ export class PiSettingTab extends PluginSettingTab {
                             type: "dropdown",
                             key: "thinkingLevel",
                             options: {
-                                none: t("settings.thinkingLevel.none"),
+                                off: t("settings.thinkingLevel.none"),
+                                minimal: t("settings.thinkingLevel.minimal"),
                                 low: t("settings.thinkingLevel.low"),
                                 medium: t("settings.thinkingLevel.medium"),
-                                high: t("settings.thinkingLevel.high")
+                                high: t("settings.thinkingLevel.high"),
+                                xhigh: t("settings.thinkingLevel.xhigh")
                             }
                         }
                     },
@@ -189,7 +192,16 @@ export class PiSettingTab extends PluginSettingTab {
         // Sound cast: we just verified `key` is a real settings key and `value`
         // matches its declared primitive type.
         (this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+
+        if (key === "thinkingLevel") {
+            this.plugin.settings.thinkingLevel = normalizeThinkingLevel(String(value));
+        }
+
         await this.plugin.saveSettings();
+
+        if (key === "thinkingLevel") {
+            await this.plugin.applyThinkingLevelSetting(String(value));
+        }
     }
 
     private isSettingsKey(key: string): key is keyof PiPluginSettings {

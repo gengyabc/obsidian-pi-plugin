@@ -12,6 +12,7 @@ import type { PiCommand } from "./commands";
 import { MessageStore } from "./message-store";
 import type { MessageStoreData } from "./message-store";
 import { t } from "./i18n/index";
+import { normalizeThinkingLevel } from "./thinking-level";
 
 
 interface ModelOption {
@@ -355,10 +356,39 @@ export default class PiPlugin extends Plugin {
     async loadSettings(): Promise<void> {
         const raw = await this.loadData() as Record<string, unknown> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+        this.settings.thinkingLevel = normalizeThinkingLevel(this.settings.thinkingLevel, DEFAULT_SETTINGS.thinkingLevel as "medium");
     }
 
     async saveSettings(): Promise<void> {
+        this.settings.thinkingLevel = normalizeThinkingLevel(this.settings.thinkingLevel, DEFAULT_SETTINGS.thinkingLevel as "medium");
         await this.saveData(this.settings);
+    }
+
+    async applyThinkingLevelSetting(level: string): Promise<void> {
+        const normalizedLevel = normalizeThinkingLevel(level, DEFAULT_SETTINGS.thinkingLevel as "medium");
+        this.settings.thinkingLevel = normalizedLevel;
+
+        if (!this.connection?.isConnected()) {
+            return;
+        }
+
+        try {
+            await this.connection.send({
+                type: "set_thinking_level",
+                level: normalizedLevel,
+            });
+
+            if (this.statusBar) {
+                await this.statusBar.refreshModel();
+            }
+
+            const view = this.getActiveView();
+            if (view) {
+                await view.refreshHeader();
+            }
+        } catch {
+            // Non-fatal — setting will still apply to the next connection startup.
+        }
     }
 
     /**
@@ -431,6 +461,7 @@ export default class PiPlugin extends Plugin {
         if (this.settings.defaultModel) {
             args.push("--model", this.settings.defaultModel);
         }
+        args.push("--thinking", normalizeThinkingLevel(this.settings.thinkingLevel, DEFAULT_SETTINGS.thinkingLevel as "medium"));
 
         try {
             // Create connection

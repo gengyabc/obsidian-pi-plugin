@@ -9,7 +9,8 @@ vi.mock("path");
 vi.mock("os");
 
 // Import after mocking
-import { DEFAULT_SETTINGS, PiPluginSettings } from "./settings";
+import { App } from "obsidian";
+import { DEFAULT_SETTINGS, PiSettingTab } from "./settings";
 
 describe("DEFAULT_SETTINGS", () => {
     it("has correct default values", () => {
@@ -23,6 +24,24 @@ describe("DEFAULT_SETTINGS", () => {
         expect(DEFAULT_SETTINGS.persistSessions).toBe(true);
         expect(DEFAULT_SETTINGS.thinkingLevel).toBe("medium");
         expect(DEFAULT_SETTINGS.rpcTimeout).toBe(60_000);
+    });
+});
+
+describe("PiSettingTab", () => {
+    it("applies thinking level changes immediately", async () => {
+        const plugin = {
+            settings: { ...DEFAULT_SETTINGS },
+            saveSettings: vi.fn().mockResolvedValue(undefined),
+            applyThinkingLevelSetting: vi.fn().mockResolvedValue(undefined),
+        };
+
+        const tab = new PiSettingTab(new App(), plugin as any);
+
+        await tab.setControlValue("thinkingLevel", "low");
+
+        expect(plugin.settings.thinkingLevel).toBe("low");
+        expect(plugin.saveSettings).toHaveBeenCalledOnce();
+        expect(plugin.applyThinkingLevelSetting).toHaveBeenCalledWith("low");
     });
 });
 
